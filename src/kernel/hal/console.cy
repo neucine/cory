@@ -1,7 +1,7 @@
 import .hal.qemu_aarch64_virt.uart;
 import std.io;
 
-pub fn console_init(): void {
+pub fn init(): void {
     io.install_writer(cycor_console_writer_write, none);
 }
 
