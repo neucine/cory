@@ -2,14 +2,14 @@ import .hal.qemu_aarch64_virt.uart;
 import std.io;
 
 pub fn init(): void {
-    io.install_writer(cycor_console_writer_write, none);
+    io.install_writer(write, none);
 }
 
 pub fn putc(ch: u8): void {
     uart.tx(ch);
 }
 
-export c fn cycor_console_writer_write(ptr: *c_char, len: c_llong, ctx: ?*c_void): void = "cycor_console_writer_write" {
+export c fn write(ptr: *c_char, len: c_llong, ctx: ?*c_void): void {
     unchecked {
         var addr: usize = ptr as! usize;
         const end: usize = addr + (len as usize);
