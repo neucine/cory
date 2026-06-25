@@ -1,0 +1,16 @@
+name = "cycor"
+entry = "kernel/src/main.cy"
+
+[build]
+target = "aarch64-none-elf"
+cpu = "generic"
+opt = "release"
+emit = ["elf", "bin"]
+
+[link]
+script = "kernel/platform/qemu_aarch64_virt/boot/link.ld"
+entry_symbol = "_start"
+
+[asm]
+sources = ["kernel/platform/qemu_aarch64_virt/boot/start.S"]
+

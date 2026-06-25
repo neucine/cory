@@ -1,0 +1,15 @@
+.DS_Store
+
+# Build outputs
+/build/
+/out/
+/dist/
+
+# Logs and run artifacts
+*.log
+*.trace
+*.dump
+
+# Tool caches
+/.cache/
+
