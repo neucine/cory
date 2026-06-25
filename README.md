@@ -23,7 +23,7 @@ For the early phase of the project, `SPEC.md` is the single source of truth. Sec
 ## Repository layout
 
 ```text
-src/kernel/   Kernel source and current boot artifacts
+src/kernel/   Kernel source
 src/user/     Userspace source, intentionally empty until needed
 ```
 
@@ -77,9 +77,9 @@ build/cycor.elf
 build/cycor.bin
 ```
 
-QEMU run targets are placeholders until early serial logging is implemented:
+The current kernel entry writes to the AArch64 QEMU `virt` PL011 UART and then
+halts. When QEMU is available, run:
 
 ```text
-make qemu-aarch64
-make qemu-riscv64
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cycor.elf
 ```

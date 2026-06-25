@@ -8,8 +8,8 @@ opt = "release"
 emit = ["elf", "bin"]
 
 [link]
-script = "src/kernel/link.ld"
+script = "src/kernel/hal/qemu_aarch64_virt/link.ld"
 entry_symbol = "_start"
 
 [asm]
-sources = ["src/kernel/start.S"]
+sources = ["src/kernel/hal/qemu_aarch64_virt/start.S"]

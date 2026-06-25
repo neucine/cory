@@ -1,8 +1,5 @@
+import .kernel;
+
 export c fn cyna_entry(): void = "cyna_entry" {
-    kernel_main();
+    kernel.kernel_start();
 }
-
-fn kernel_main(): void {
-    return;
-}
-
