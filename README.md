@@ -20,6 +20,13 @@ The full project specification is in [`docs/SPEC.md`](docs/SPEC.md).
 
 For the early phase of the project, `docs/SPEC.md` is the single source of truth. Sections can be split into separate docs later when the design becomes too large to edit comfortably.
 
+## GitHub language stats
+
+GitHub Linguist does not have first-class Cyna support yet, and `.cy` is
+currently claimed by Cycript in Linguist's language database. This repository
+uses `.gitattributes` to mark `.cy` files as Cyna while excluding them from
+GitHub language percentages until Cyna is supported upstream.
+
 ## Repository layout
 
 ```text
