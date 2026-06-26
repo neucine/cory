@@ -904,6 +904,16 @@ Goal:
 Manage memory safely enough to support kernel objects and tasks.
 ```
 
+Early boot uses a bounded bump allocator starting at the page-aligned kernel
+end and ending at the platform RAM limit. The bump allocator is only for early
+metadata. The physical page allocator reserves its bitmap through the bump
+allocator, snapshots the consumed range, then freezes the bump allocator.
+
+The handoff rule is page-granular: every page touched by the kernel image,
+early boot allocations, or physical allocator metadata is reserved. The first
+reusable page after boot allocations is `align_up(boot.next, page_size)`, with
+no extra hidden padding.
+
 Features:
 
 - physical page allocator

@@ -5,7 +5,7 @@ pub fn print_entry(): void {
 }
 
 pub fn print_memory_ready(): void {
-    println("memory: boot allocator ready");
+    println("memory: physical pages ready");
 }
 
 pub fn halt(): void {

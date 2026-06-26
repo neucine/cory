@@ -11,6 +11,7 @@ pub struct Snapshot {
 var heap_start: usize = 0;
 var heap_next: usize = 0;
 var heap_end: usize = 0;
+var frozen: bool = false;
 
 pub fn align_up(value: usize, alignment: usize): usize {
     if alignment == 0 {
@@ -27,9 +28,14 @@ pub fn init(memory_end: usize, page_size: usize): void {
     }
     heap_next = heap_start;
     heap_end = memory_end;
+    frozen = false;
 }
 
 pub fn reserve(size: usize, alignment: usize): usize {
+    if frozen {
+        return 0;
+    }
+
     const aligned = align_up(heap_next, alignment);
     const next = aligned + size;
     if next > heap_end {
@@ -50,4 +56,12 @@ pub fn snapshot(): Snapshot {
 
 pub fn used(): usize {
     return heap_next - heap_start;
+}
+
+pub fn freeze(): void {
+    frozen = true;
+}
+
+pub fn is_frozen(): bool {
+    return frozen;
 }
