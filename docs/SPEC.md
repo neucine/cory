@@ -858,7 +858,7 @@ Define the project before writing too much kernel code.
 Deliverables:
 
 - `README.md`
-- `SPEC.md`
+- `docs/SPEC.md`
 
 ### Phase 1 — AArch64 QEMU boot
 

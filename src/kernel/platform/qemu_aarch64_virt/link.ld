@@ -31,6 +31,9 @@ SECTIONS
     __stack_top = .;
   }
 
+  . = ALIGN(4096);
+  __kernel_end = .;
+
   /DISCARD/ :
   {
     *(.comment)
@@ -38,4 +41,3 @@ SECTIONS
     *(.eh_frame*)
   }
 }
-

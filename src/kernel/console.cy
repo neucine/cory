@@ -1,12 +1,15 @@
-import .hal.qemu_aarch64_virt.uart;
 import std.io;
+
+extern c {
+    fn platform_putc(ch: c_uchar): void = "cycor_console_putc";
+}
 
 pub fn init(): void {
     io.install_writer(write, none);
 }
 
 pub fn putc(ch: u8): void {
-    uart.tx(ch);
+    platform_putc(ch as c_uchar);
 }
 
 export c fn write(ptr: *c_char, len: c_llong, ctx: ?*c_void): void {

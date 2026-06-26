@@ -16,20 +16,21 @@ Cycor    — Cyna-native kernel substrate
 
 ## Canonical specification
 
-The full project specification is in [`SPEC.md`](SPEC.md).
+The full project specification is in [`docs/SPEC.md`](docs/SPEC.md).
 
-For the early phase of the project, `SPEC.md` is the single source of truth. Sections can be split into separate docs later when the design becomes too large to edit comfortably.
+For the early phase of the project, `docs/SPEC.md` is the single source of truth. Sections can be split into separate docs later when the design becomes too large to edit comfortably.
 
 ## Repository layout
 
 ```text
-src/kernel/   Kernel source
-src/user/     Userspace source, intentionally empty until needed
+src/kernel/           Platform-neutral kernel source
+src/kernel/arch/      CPU architecture entry and exception/trap assembly
+src/kernel/platform/  Kernel-owned platform startup, memory maps, console, and linker scripts
+src/user/             Userspace source, intentionally empty until needed
 ```
 
-Do not add architecture, platform, ABI, service, or subsystem directories before
-there is real code for that boundary. `SPEC.md` remains the place for planned
-structure.
+`docs/SPEC.md` remains the place for planned structure. Source directories should
+exist when there is real code for that boundary.
 
 ## Initial target platforms
 
@@ -65,8 +66,10 @@ The pipeline should run across isolated userspace services, communicate through 
 
 ```text
 ~/.cyna/0.1.8/bin/cyna version
-~/.cyna/0.1.8/bin/cyna check src/kernel/main.cy
+~/.cyna/0.1.8/bin/cyna check src/kernel/platform/qemu_aarch64_virt/main.cy
 ~/.cyna/0.1.8/bin/cyna build .
+~/.cyna/0.1.8/bin/cyna check src/kernel/platform/qemu_riscv64_virt/main.cy
+~/.cyna/0.1.8/bin/cyna build cyna.riscv64.toml
 ```
 
 Expected outputs:
@@ -75,11 +78,16 @@ Expected outputs:
 build/cycor
 build/cycor.elf
 build/cycor.bin
+build/cycor-riscv64
+build/cycor-riscv64.elf
+build/cycor-riscv64.bin
 ```
 
-The current kernel entry writes to the AArch64 QEMU `virt` PL011 UART and then
-halts. When QEMU is available, run:
+The current kernel entries write to the QEMU `virt` UART, initialize exception
+or trap vectors, run the boot allocator self-test, and then halt. When QEMU is
+available, run:
 
 ```text
 qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cycor.elf
+qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cycor-riscv64.elf
 ```

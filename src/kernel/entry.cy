@@ -1,5 +1,3 @@
-import .kernel;
-
 extern c {
     const __bss_start: *u8 = "__bss_start";
     const __bss_end: *u8 = "__bss_end";
@@ -18,11 +16,6 @@ fn zero_region(start: *u8, end: *u8): void {
     }
 }
 
-fn zero_bss(): void {
+pub fn zero_bss(): void {
     zero_region(__bss_start, __bss_end);
-}
-
-export c fn cyna_entry(): void = "cyna_entry" {
-    zero_bss();
-    kernel.kernel_start();
 }
