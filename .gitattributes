@@ -1,0 +1,2 @@
+# GitHub Linguist does not know Cyna yet, so .cy otherwise counts as Cycript.
+*.cy linguist-language=Cyna -linguist-detectable
