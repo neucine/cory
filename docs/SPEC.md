@@ -914,6 +914,25 @@ early boot allocations, or physical allocator metadata is reserved. The first
 reusable page after boot allocations is `align_up(boot.next, page_size)`, with
 no extra hidden padding.
 
+The early memory map is the canonical explanation of RAM ownership during
+bring-up. It uses simple names:
+
+- `free_ram`
+- `kernel_image`
+- `boot_allocator`
+- `physical_page_bitmap`
+- `early_kheap`
+- `device_mmio`
+- `kernel_stack`
+
+Regions in the table must be non-overlapping and ordered. VM setup should use
+the map to preserve identity mappings for every non-`free_ram` region until a
+later subsystem explicitly migrates or releases it.
+
+During early boot the map is stored in a small fixed table. It must not depend
+on heap allocation, because the heap policy itself is derived from this map and
+from the physical page allocator state.
+
 Features:
 
 - physical page allocator

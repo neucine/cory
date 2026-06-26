@@ -1,5 +1,6 @@
 import .kernel.memory.boot;
 import { Layout } from .kernel.memory.layout;
+import .kernel.memory.map as memory_map;
 import .kernel.memory.phys;
 import .kernel.panic as panic_mod;
 
@@ -116,5 +117,73 @@ pub fn run_phys_tests(map: Layout): void {
     }
     if !phys.free_page(second) {
         fail("selftest: phys free reused page");
+    }
+}
+
+pub fn run_memory_map_tests(map: Layout): void {
+    const snapshot = memory_map.snapshot();
+    if snapshot.region_count < 4 {
+        fail("selftest: memory map region count");
+    }
+    if snapshot.identity_region_count < 3 {
+        fail("selftest: memory map identity count");
+    }
+    if snapshot.free_region_count == 0 {
+        fail("selftest: memory map free count");
+    }
+
+    var index: usize = 0;
+    var saw_kernel = false;
+    var saw_boot = false;
+    var saw_bitmap = false;
+    while index < memory_map.count() {
+        const region = memory_map.get(index);
+        if region.start >= region.end {
+            fail("selftest: memory map ordered range");
+        }
+        if region.start < map.ram_start {
+            fail("selftest: memory map low bound");
+        }
+        if region.end > map.ram_end {
+            fail("selftest: memory map high bound");
+        }
+
+        if index != 0 {
+            const previous = memory_map.get(index - 1);
+            if previous.end > region.start {
+                fail("selftest: memory map overlap");
+            }
+        }
+
+        if region.kind == memory_map.kind_kernel_image {
+            saw_kernel = true;
+            if !memory_map.needs_identity_mapping(region.kind) {
+                fail("selftest: kernel image identity");
+            }
+        }
+        if region.kind == memory_map.kind_boot_allocator {
+            saw_boot = true;
+            if !memory_map.needs_identity_mapping(region.kind) {
+                fail("selftest: boot allocator identity");
+            }
+        }
+        if region.kind == memory_map.kind_physical_page_bitmap {
+            saw_bitmap = true;
+            if !memory_map.needs_identity_mapping(region.kind) {
+                fail("selftest: bitmap identity");
+            }
+        }
+
+        index = index + 1;
+    }
+
+    if !saw_kernel {
+        fail("selftest: memory map kernel region");
+    }
+    if !saw_boot {
+        fail("selftest: memory map boot region");
+    }
+    if !saw_bitmap {
+        fail("selftest: memory map bitmap region");
     }
 }
