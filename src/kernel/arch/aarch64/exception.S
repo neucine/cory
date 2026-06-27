@@ -50,3 +50,11 @@ cycor_arch_abi_probe_value:
     movz x0, #0xffee
     movk x0, #0xc0, lsl #16
     ret
+
+.global cycor_arch_current_el
+.type cycor_arch_current_el, %function
+cycor_arch_current_el:
+    // C ABI: c_ulong cycor_arch_current_el(void)
+    mrs x0, CurrentEL
+    lsr x0, x0, #2
+    ret

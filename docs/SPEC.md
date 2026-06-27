@@ -231,8 +231,9 @@ architecture:
 
 Current status:
 
-- AArch64 QEMU direct boot enters Cycor and writes `VBAR_EL1`, but Cycor does
-  not yet explicitly detect EL or drop from EL2/EL3 to EL1.
+- AArch64 QEMU direct boot detects the current exception level, keeps EL1
+  entry direct, drops EL2 entry to EL1, and asserts that platform exception
+  setup runs at EL1.
 - RISC-V QEMU direct boot with `-bios none` enters an M-mode shim, grants
   S-mode access to RAM through PMP, delegates common traps/interrupts, and then
   enters the kernel in S-mode before installing the S-mode trap vector.
@@ -692,7 +693,7 @@ Current status:
 
 - QEMU AArch64 boots and reaches kernel selftests.
 - QEMU RISC-V64 boots and reaches kernel selftests.
-- AArch64 still relies on convenient direct kernel entry.
+- AArch64 has an EL2-to-EL1 entry path and asserts EL1 before exception setup.
 - RISC-V has an M-mode shim that enters the kernel in S-mode.
 - Physical allocation, pre-VM heap, memory-map ownership, and heap diagnostics
   exist.
@@ -736,10 +737,11 @@ Done:
 - basic exception/trap vector
 - boot selftests
 - RISC-V M-mode shim enters S-mode before common kernel entry
+- AArch64 EL2 entry drops to EL1 before common kernel entry
 
 Still incomplete:
 
-- explicit AArch64 EL transition
+- AArch64 EL3 entry path and fuller EL2 policy
 - fuller RISC-V trap/interrupt delegation policy
 
 ### Phase 2 — Privilege-Mode Ownership
