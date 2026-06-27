@@ -19,7 +19,15 @@ pub fn init(): void {
     println("exception: vectors ready");
 }
 
-export c fn cycor_arch_exception_entry(): void = "cycor_arch_exception_entry" {
-    println("exception: unhandled");
+export c fn cycor_arch_exception_entry(esr: c_ulong, elr: c_ulong, far: c_ulong, spsr: c_ulong): void = "cycor_arch_exception_entry" {
+    println("exception: unhandled aarch64");
+    println("exception: esr_el1");
+    println(esr as usize);
+    println("exception: elr_el1");
+    println(elr as usize);
+    println("exception: far_el1");
+    println(far as usize);
+    println("exception: spsr_el1");
+    println(spsr as usize);
     panic_mod.panic();
 }

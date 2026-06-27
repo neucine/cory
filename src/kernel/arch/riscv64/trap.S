@@ -4,6 +4,10 @@
 .type cycor_arch_trap_vector, @function
 
 cycor_arch_trap_vector:
+    csrr a0, scause
+    csrr a1, sepc
+    csrr a2, stval
+    csrr a3, sstatus
     call cycor_arch_trap_entry
 1:
     wfi

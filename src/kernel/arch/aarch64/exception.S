@@ -28,6 +28,10 @@ cycor_arch_exception_vectors:
 
 .type cycor_arch_exception_vector_entry, %function
 cycor_arch_exception_vector_entry:
+    mrs x0, esr_el1
+    mrs x1, elr_el1
+    mrs x2, far_el1
+    mrs x3, spsr_el1
     bl cycor_arch_exception_entry
 1:
     wfe

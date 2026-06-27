@@ -734,7 +734,7 @@ Done:
 - direct QEMU kernel entry
 - serial logging
 - panic path
-- basic exception/trap vector
+- basic exception/trap vector with diagnostic state capture
 - boot selftests
 - RISC-V M-mode shim enters S-mode before common kernel entry
 - AArch64 EL2 entry drops to EL1 before common kernel entry
@@ -743,6 +743,7 @@ Still incomplete:
 
 - AArch64 EL3 entry path and fuller EL2 policy
 - fuller RISC-V trap/interrupt delegation policy
+- trap-frame save/restore for recoverable kernel and user traps
 
 ### Phase 2 — Privilege-Mode Ownership
 
@@ -758,6 +759,8 @@ AArch64 deliverables:
 - transition EL3/EL2 to EL1 when required
 - set EL1 stack
 - set `VBAR_EL1`
+- report `ESR_EL1`, `ELR_EL1`, `FAR_EL1`, and `SPSR_EL1` on unhandled
+  exceptions before panic
 - document register ownership before common kernel entry
 
 RISC-V deliverables:
@@ -767,6 +770,8 @@ RISC-V deliverables:
 - configure PMP for kernel RAM access
 - enter S-mode with `mret`
 - set `stvec` for S-mode traps
+- report `scause`, `sepc`, `stval`, and `sstatus` on unhandled traps before
+  panic
 - document M-mode responsibilities left behind
 
 ### Phase 3 — Memory Foundation
