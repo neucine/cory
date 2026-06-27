@@ -26,6 +26,10 @@ SECTIONS
 
   .bootstrap_stack (NOLOAD) : ALIGN(16)
   {
+    __m_stack_bottom = .;
+    . += 0x1000;
+    __m_stack_top = .;
+    . = ALIGN(16);
     __stack_bottom = .;
     . += 0x4000;
     __stack_top = .;

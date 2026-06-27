@@ -202,6 +202,13 @@ Rules:
   instances, timers, device tree or board descriptors, and boot-device quirks.
 - Common kernel code must depend on architecture/platform traits or small Cyna
   modules, not on concrete QEMU constants.
+- `extern c` declarations are a C ABI boundary, not an ordinary Cyna boundary.
+  Use C ABI carrier types such as `c_ulong`, `c_size_t`, pointers, and
+  C-layout structs in the declaration, then convert to kernel-native types such
+  as `usize` inside Cyna code after the call returns.
+- Assembly symbols called through `extern c` must obey the target C ABI:
+  return scalar values in the ABI return register, preserve callee-saved
+  registers, and use the target ABI return instruction.
 
 Portability is a first-class requirement because Cycor has two tracks:
 
@@ -226,8 +233,9 @@ Current status:
 
 - AArch64 QEMU direct boot enters Cycor and writes `VBAR_EL1`, but Cycor does
   not yet explicitly detect EL or drop from EL2/EL3 to EL1.
-- RISC-V QEMU direct boot with `-bios none` enters Cycor and writes `mtvec`, so
-  Cycor is currently effectively running in M-mode.
+- RISC-V QEMU direct boot with `-bios none` enters an M-mode shim, grants
+  S-mode access to RAM through PMP, delegates common traps/interrupts, and then
+  enters the kernel in S-mode before installing the S-mode trap vector.
 
 Required direction:
 
@@ -684,7 +692,8 @@ Current status:
 
 - QEMU AArch64 boots and reaches kernel selftests.
 - QEMU RISC-V64 boots and reaches kernel selftests.
-- Both QEMU targets still rely on convenient direct kernel entry.
+- AArch64 still relies on convenient direct kernel entry.
+- RISC-V has an M-mode shim that enters the kernel in S-mode.
 - Physical allocation, pre-VM heap, memory-map ownership, and heap diagnostics
   exist.
 - VM is not implemented.
@@ -726,11 +735,12 @@ Done:
 - panic path
 - basic exception/trap vector
 - boot selftests
+- RISC-V M-mode shim enters S-mode before common kernel entry
 
 Still incomplete:
 
 - explicit AArch64 EL transition
-- explicit RISC-V M-mode to S-mode transition
+- fuller RISC-V trap/interrupt delegation policy
 
 ### Phase 2 — Privilege-Mode Ownership
 
@@ -974,6 +984,13 @@ Cyna backend validation.
 
 The systems programming language in the Neucine ecosystem. Cycor is intended to
 be written primarily in Cyna.
+
+### C ABI Carrier Type
+
+A type that Cyna permits directly at an `extern c` or `export c` boundary, such
+as `c_int`, `c_ulong`, `c_size_t`, `cstr`, raw pointers, and C-layout structs.
+Kernel-native types such as `usize` should stay inside Cycor's Cyna modules
+unless Cyna explicitly makes them C ABI boundary types.
 
 ### Cycor
 

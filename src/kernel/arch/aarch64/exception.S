@@ -41,3 +41,12 @@ cycor_arch_exception_init:
     msr vbar_el1, x0
     isb
     ret
+
+.global cycor_arch_abi_probe_value
+.type cycor_arch_abi_probe_value, %function
+cycor_arch_abi_probe_value:
+    // C ABI: c_ulong cycor_arch_abi_probe_value(void)
+    // Returns a fixed scalar in x0 so Cyna can verify extern c return lowering.
+    movz x0, #0xffee
+    movk x0, #0xc0, lsl #16
+    ret
