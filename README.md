@@ -99,6 +99,17 @@ qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cycor
 qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cycor-riscv64.elf
 ```
 
+The common check/build/QEMU flows are wrapped by:
+
+```text
+tools/check.sh normal
+tools/check.sh traps
+tools/check.sh all
+```
+
+Use `CYNA=/path/to/cyna tools/check.sh all` to test with a different compiler
+binary.
+
 ## Trap diagnostic probes
 
 Normal boot must not deliberately panic. Trap diagnostics are tested through
