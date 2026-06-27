@@ -1,4 +1,5 @@
 import .kernel.memory.boot;
+import .kernel.memory.heap;
 import { Layout } from .kernel.memory.layout;
 import .kernel.memory.phys;
 
@@ -6,7 +7,7 @@ pub const kind_free_ram: i32 = 0;
 pub const kind_kernel_image: i32 = 1;
 pub const kind_boot_allocator: i32 = 2;
 pub const kind_physical_page_bitmap: i32 = 3;
-pub const kind_early_kheap: i32 = 4;
+pub const kind_pre_vm_heap: i32 = 4;
 pub const kind_device_mmio: i32 = 5;
 pub const kind_kernel_stack: i32 = 6;
 
@@ -22,15 +23,21 @@ pub struct MemoryMapSnapshot {
     pub free_region_count: usize;
 }
 
-pub const max_regions: usize = 8;
+pub const max_regions: usize = 16;
+const max_owned_regions: usize = 8;
 
 // The early map is a small fixed table so kernel boot has deterministic
 // storage and does not depend on heap allocation. The parallel arrays keep the
 // representation simple until Cyna has enum arrays and richer aggregate tools.
-var region_starts: [8]usize = [0, 0, 0, 0, 0, 0, 0, 0];
-var region_ends: [8]usize = [0, 0, 0, 0, 0, 0, 0, 0];
-var region_kinds: [8]i32 = [kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram];
+var region_starts: [16]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+var region_ends: [16]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+var region_kinds: [16]i32 = [kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram];
 var used_regions: usize = 0;
+
+var owned_starts: [8]usize = [0, 0, 0, 0, 0, 0, 0, 0];
+var owned_ends: [8]usize = [0, 0, 0, 0, 0, 0, 0, 0];
+var owned_kinds: [8]i32 = [kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram];
+var used_owned_regions: usize = 0;
 
 fn empty_region(): Region {
     return Region {
@@ -42,6 +49,7 @@ fn empty_region(): Region {
 
 fn reset(): void {
     used_regions = 0;
+    used_owned_regions = 0;
 }
 
 fn write_region(index: usize, start: usize, end: usize, kind: i32): void {
@@ -63,33 +71,85 @@ fn add_region(start: usize, end: usize, kind: i32): bool {
     return true;
 }
 
+fn write_owned_region(index: usize, start: usize, end: usize, kind: i32): void {
+    owned_starts[index] = start;
+    owned_ends[index] = end;
+    owned_kinds[index] = kind;
+}
+
+fn add_owned_region(start: usize, end: usize, kind: i32): bool {
+    if end <= start {
+        return true;
+    }
+    if used_owned_regions >= max_owned_regions {
+        return false;
+    }
+
+    var index = used_owned_regions;
+    while index > 0 and owned_starts[index - 1] > start {
+        write_owned_region(index, owned_starts[index - 1], owned_ends[index - 1], owned_kinds[index - 1]);
+        index = index - 1;
+    }
+
+    write_owned_region(index, start, end, kind);
+    used_owned_regions = used_owned_regions + 1;
+    return true;
+}
+
+fn build_regions_from_owned(layout: Layout): bool {
+    var cursor = layout.ram_start;
+    var index: usize = 0;
+
+    while index < used_owned_regions {
+        const start = owned_starts[index];
+        const end = owned_ends[index];
+        if start < layout.ram_start or end > layout.ram_end {
+            return false;
+        }
+        if start < cursor {
+            return false;
+        }
+
+        if !add_region(cursor, start, kind_free_ram) {
+            return false;
+        }
+        if !add_region(start, end, owned_kinds[index]) {
+            return false;
+        }
+
+        cursor = end;
+        index = index + 1;
+    }
+
+    return add_region(cursor, layout.ram_end, kind_free_ram);
+}
+
 pub fn rebuild(layout: Layout): bool {
     reset();
 
     const boot_used = boot.snapshot();
     const phys_used = phys.snapshot();
+    const heap_used = heap.snapshot();
     const bitmap_end = boot.align_up(phys_used.bitmap_start + phys_used.bitmap_bytes, layout.page_size);
 
-    // Keep the table non-overlapping. The boot allocator owns the broad early
-    // range, but the physical page bitmap gets a separate row because VM setup
-    // and diagnostics need to understand why that live metadata exists.
-    if !add_region(layout.ram_start, layout.kernel_load, kind_free_ram) {
+    // Owned ranges can be discovered in subsystem order, not address order.
+    // Build a sorted owned list first, then fill every gap as `free_ram`.
+    if !add_owned_region(layout.kernel_load, boot_used.start, kind_kernel_image) {
         return false;
     }
-    if !add_region(layout.kernel_load, boot_used.start, kind_kernel_image) {
+    if !add_owned_region(boot_used.start, phys_used.bitmap_start, kind_boot_allocator) {
         return false;
     }
-    if !add_region(boot_used.start, phys_used.bitmap_start, kind_boot_allocator) {
+    if !add_owned_region(phys_used.bitmap_start, bitmap_end, kind_physical_page_bitmap) {
         return false;
     }
-    if !add_region(phys_used.bitmap_start, bitmap_end, kind_physical_page_bitmap) {
-        return false;
-    }
-    if !add_region(bitmap_end, layout.ram_end, kind_free_ram) {
-        return false;
+    if heap_used.committed_pages != 0 {
+        if !add_owned_region(heap_used.start, heap_used.end, kind_pre_vm_heap) {
+            return false;
+        }
     }
 
-    return true;
+    return build_regions_from_owned(layout);
 }
 
 pub fn count(): usize {

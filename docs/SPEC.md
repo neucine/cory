@@ -5,71 +5,60 @@ Project: Cycor
 Pronunciation: Sai-core  
 Repository: neucine/cycor
 
-## 1. Definition
+## Purpose
 
 Cycor is a Cyna-native capability kernel substrate.
 
-Its immediate purpose is to demonstrate that Cyna can implement serious low-level systems software safely and ergonomically.
+Its immediate purpose is to prove that Cyna can implement serious low-level
+systems software: freestanding boot, traps/exceptions, memory management,
+virtual memory, scheduling, IPC, capabilities, and userspace service
+orchestration.
 
-Its long-term purpose is to become the operating substrate for Raspberry Pi Compute Module 5 based camera and imaging hardware.
+Its long-term product direction is a camera and imaging operating substrate for
+Raspberry Pi Compute Module 5 based hardware.
 
-Cycor should be understood as a kernel substrate, not a general-purpose operating system. Product behavior should be built above the kernel through userspace services and OS personalities.
+Cycor is not a general-purpose operating system. It is the privileged substrate
+below userspace services and OS personalities. Camera policy, filesystem policy,
+display policy, and application behavior belong above the kernel.
 
-## 2. Project identity
+## Direction
+
+Cycor grows bottom-up. Each layer must leave behind:
+
+- a small working implementation
+- a selftest, boot check, or integration check
+- names and comments clear enough to explain ownership and lifecycle
+- a spec decision when the concept is not obvious from code
+
+Current build direction:
 
 ```text
-Neucine  — ecosystem / organization
-Cyna     — systems programming language
-Cycor    — Cyna-native kernel substrate
+boot correctness
+    -> privilege-mode ownership
+    -> memory foundation
+    -> virtual memory
+    -> kernel objects and capabilities
+    -> threads/scheduler
+    -> userspace/syscalls
+    -> IPC/events
+    -> shared buffers
+    -> service manager
+    -> userspace driver hosts
+    -> fake imaging pipeline
 ```
 
-Cycor is pronounced **Sai-core**.
+Near-term work is not camera policy, not POSIX, and not userspace services. The
+near-term work is to own the machine cleanly:
 
-## 3. Mission
+- enter the intended privileged kernel mode on each architecture
+- establish physical memory, pre-VM heap, and memory-map invariants
+- add virtual memory and address-space primitives
+- introduce typed kernel objects and capability tables
 
-### 3.1 Language demonstration mission
+When choosing the next task, prefer the earliest incomplete layer. Do not add
+higher-level policy to compensate for a missing lower-level mechanism.
 
-Cycor should demonstrate Cyna in domains that stress a systems language:
-
-- freestanding code generation
-- explicit memory layout
-- alignment and ABI control
-- physical memory management
-- virtual memory management
-- exception/trap handling
-- interrupt routing
-- thread context switching
-- safe wrappers around unsafe hardware access
-- deterministic allocation
-- object lifetime management
-- capability ownership
-- async IPC
-- zero-copy buffer transfer
-- userspace service orchestration
-
-The kernel should act as a design pressure test for Cyna. If implementing Cycor reveals friction in Cyna's ownership model, allocator model, unsafe boundary model, async model, or FFI model, that feedback should be treated as valuable language-design input.
-
-### 3.2 Imaging hardware mission
-
-Cycor should grow toward a camera/imaging operating substrate.
-
-The future system should support:
-
-- sensor service
-- ISP service
-- capture service
-- preview service
-- storage writer
-- display service
-- input service
-- power and thermal service
-- diagnostics service
-
-The kernel should enable these services through isolation, scheduling primitives, IPC, events, shared buffers, device capabilities, and observability.
-
-The kernel should not embed camera policy directly.
-
-## 4. Non-goals
+## Non-Goals
 
 Cycor is not:
 
@@ -83,47 +72,47 @@ Cycor is not:
 - a full hardware compatibility project
 - a monolithic camera firmware blob
 
-Compatibility layers may exist later, but the native architecture is capability-based, typed, async-oriented, and service-oriented.
+Compatibility layers may exist later. The native model is capability-based,
+typed, async-oriented, service-oriented, and observable.
 
-## 5. Design principles
+## Kernel Shape
 
-### 5.1 Kernel as substrate
+The kernel provides irreducible machine mechanisms:
 
-The kernel should provide irreducible machine mechanisms:
-
-- isolate execution
+- enter and control the intended privileged mode
 - map memory
+- isolate address spaces
 - schedule execution
 - check capabilities
 - send messages
 - deliver events
 - route interrupts
-- control device access
+- control MMIO and device access
 - account resources
 - expose trace data
 
-Everything else should be policy above the kernel.
+Everything else is policy above the kernel.
 
-### 5.2 Small privileged core
+The privileged core should contain only mechanisms that require privileged
+execution:
 
-The privileged core should contain only mechanisms that require privileged execution:
-
+- architecture boot and privilege transition
+- trap/exception handling
 - physical memory manager
 - virtual memory manager
 - address spaces
+- kernel object table
+- capability table
 - threads/tasks
 - scheduler primitives
-- IPC
-- capability tables
-- kernel object lifecycle
+- IPC primitives
 - timers
-- exception/trap handling
 - interrupt dispatch
 - device/MMIO/IOMMU control
 - resource accounting hooks
 - trace hooks
 
-The following should be outside the core:
+The privileged core should not contain:
 
 - filesystem policy
 - network stack policy
@@ -134,117 +123,60 @@ The following should be outside the core:
 - storage format policy
 - power policy
 - user/session model
-- POSIX compatibility
+- POSIX compatibility policy
 
-### 5.3 Capability-first security
-
-Every protected object should be accessed through a capability.
-
-A process should not acquire authority through ambient global names by default. Authority should be explicit, transferable, inspectable, and revocable where possible.
-
-### 5.4 Async-first IPC
-
-Blocking APIs are not the native model. Cycor should use channels, events, wait sets, timers, and shared buffers as its primary service communication model.
-
-Blocking APIs can be wrappers over async primitives.
-
-### 5.5 Userspace drivers by default
-
-Drivers should run in isolated userspace driver hosts where practical.
-
-The kernel should provide:
-
-- device capabilities
-- controlled MMIO mapping
-- interrupt delivery as events
-- DMA buffer management
-- device fault reporting
-- capability revocation
-- driver restart support
-
-### 5.6 Observability from day one
-
-Cycor must be diagnosable.
-
-The system should answer:
-
-- who created this object?
-- who owns this capability?
-- which process consumed CPU?
-- which service held this buffer?
-- why did this event wake?
-- which IPC path introduced latency?
-- which driver caused an interrupt storm?
-- why did a frame miss its deadline?
-
-This is essential for future camera work.
-
-## 6. Architecture
-
-### 6.1 Layer model
+## Layer Architecture
 
 ```text
 Applications / Product Services
-    ├── Camera App
-    ├── Gallery App
-    ├── Settings App
-    └── Diagnostics App
+    Camera App
+    Gallery App
+    Settings App
+    Diagnostics App
 
 Imaging Services
-    ├── Capture Service
-    ├── Sensor Service
-    ├── ISP Service
-    ├── Preview Service
-    ├── Storage Writer
-    └── Display Service
+    Capture Service
+    Sensor Service
+    ISP Service
+    Preview Service
+    Storage Writer
+    Display Service
 
 General System Services
-    ├── Init / Service Manager
-    ├── Driver Manager
-    ├── Filesystem Service
-    ├── Log / Trace Service
-    ├── Resource Manager
-    └── Security Policy Service
+    Init / Service Manager
+    Driver Manager
+    Filesystem Service
+    Log / Trace Service
+    Resource Manager
+    Security Policy Service
 
 Cycor Kernel Core
-    ├── Kernel Objects
-    ├── Capabilities
-    ├── Address Spaces
-    ├── Threads / Tasks
-    ├── Scheduler
-    ├── IPC
-    ├── Shared Memory
-    ├── Events / Wait Sets
-    ├── Timers
-    ├── Interrupt Routing
-    ├── Device Isolation
-    └── Resource Accounting
+    Kernel Objects
+    Capabilities
+    Address Spaces
+    Threads / Tasks
+    Scheduler
+    IPC
+    Shared Memory
+    Events / Wait Sets
+    Timers
+    Interrupt Routing
+    Device Isolation
+    Resource Accounting
+
+Architecture + Platform Layer
+    CPU privilege entry
+    traps/exceptions
+    timer/interrupt controller glue
+    UART/MMIO descriptions
+    board memory layout
 
 Hardware
 ```
 
-### 6.2 Kernel/service split
+## Architecture and Platform Portability
 
-The kernel owns machine mechanisms.
-
-Userspace services own policy.
-
-| Area | Kernel mechanism | Userspace policy |
-|---|---|---|
-| Memory | pages, mappings, address spaces | allocator strategies, buffer pools |
-| Scheduling | priorities, timers, wakeups, accounting | capture priority, UI boost, background limits |
-| Storage | block device access, DMA buffers | filesystem format, file layout, write policy |
-| Camera | device access, interrupts, buffers | exposure, frame routing, ISP graph, preview policy |
-| Security | capabilities and rights checks | service policy, app permission grants |
-| Observability | trace hooks and object metadata | trace UI, diagnostics, frame reports |
-
-### 6.3 Architecture/platform split
-
-`arch` is CPU architecture.
-
-`platform` is board, SoC, or virtual machine.
-
-Suggested layout:
+`arch` is CPU architecture. `platform` is board, SoC, or virtual machine.
 
 ```text
 kernel/
@@ -254,36 +186,214 @@ kernel/
 
   platform/
     qemu_aarch64_virt/
-    raspberrypi_cm5/
     qemu_riscv64_virt/
+    raspberrypi_cm5/
     sifive_unmatched/
 ```
 
-Do not put Raspberry Pi specific code under `arch/aarch64`.
+Rules:
 
-Do not put SiFive specific code under `arch/riscv64`.
+- Do not put Raspberry Pi specific code under `arch/aarch64`.
+- Do not put QEMU `virt` specifics under generic architecture code.
+- Do not put SiFive specific code under `arch/riscv64`.
+- Architecture code owns CPU privilege level, traps, register save/restore,
+  page-table format, atomics, barriers, and context switch mechanics.
+- Platform code owns memory layout, UART base addresses, interrupt controller
+  instances, timers, device tree or board descriptors, and boot-device quirks.
+- Common kernel code must depend on architecture/platform traits or small Cyna
+  modules, not on concrete QEMU constants.
 
-### 6.4 Native programming model
+Portability is a first-class requirement because Cycor has two tracks:
 
-The native Cycor programming model should be:
+| Track | Target | Purpose |
+|---|---|---|
+| Product | AArch64 / Raspberry Pi CM5 | future camera and imaging hardware |
+| Research | RISC-V64 / QEMU + SiFive | architecture validation and Cyna backend pressure |
+
+Both QEMU targets should keep boot checks working. Platform parity bugs are
+valuable because they reveal hidden assumptions in Cyna, the linker, runtime
+builtins, or Cycor's architecture split.
+
+## Privilege-Mode Decision
+
+Cycor should run the kernel in the normal OS privilege level for each
+architecture:
+
+- AArch64 kernel mode: EL1
+- RISC-V kernel mode: S-mode
+
+Current status:
+
+- AArch64 QEMU direct boot enters Cycor and writes `VBAR_EL1`, but Cycor does
+  not yet explicitly detect EL or drop from EL2/EL3 to EL1.
+- RISC-V QEMU direct boot with `-bios none` enters Cycor and writes `mtvec`, so
+  Cycor is currently effectively running in M-mode.
+
+Required direction:
 
 ```text
-capability authority
-    +
-typed kernel objects
-    +
-async IPC
-    +
-shared buffers
-    +
-event/waitset completion
+AArch64:
+  _start
+    read CurrentEL
+    if EL3: configure SCR_EL3, SPSR_EL3, ELR_EL3, eret
+    if EL2: configure HCR_EL2/CNTHCTL_EL2, SPSR_EL2, ELR_EL2, eret
+    if EL1: continue
+  el1_entry
+    set stack
+    set VBAR_EL1
+    call common kernel entry
+
+RISC-V:
+  _start in M-mode
+    set temporary M-mode stack
+    delegate S-mode traps/interrupts
+    configure PMP for kernel RAM access
+    set mepc = s_mode_entry
+    set mstatus.MPP = S
+    mret
+  s_mode_entry
+    set S-mode stack
+    set stvec
+    call common kernel entry
 ```
 
-The programming model should avoid path-based ambient authority as the native default.
+This must be completed before virtual memory, timers, interrupts, and userspace
+become serious.
 
-## 7. Core kernel object model
+## Memory Architecture
 
-Initial kernel objects:
+Memory has a strict allocator hierarchy:
+
+```text
+boot bump allocator
+    -> physical page allocator
+        -> pre-VM kernel heap
+            -> future VM-backed kernel heap
+```
+
+### Boot Bump Allocator
+
+Decision:
+
+- module: `kernel.memory.boot`
+- role: fixed-range allocator for early metadata
+- granularity: bytes
+- free/reuse: none
+- lifetime: from `_start` until physical allocator initialization completes
+
+The boot allocator starts at the page-aligned kernel end and ends at the
+platform RAM limit. The physical allocator reserves its bitmap through the boot
+allocator, snapshots the consumed range, then freezes the boot allocator.
+
+### Physical Page Allocator
+
+Decision:
+
+- module: `kernel.memory.phys`
+- role: physical frame ownership
+- granularity: page
+- free/reuse: yes
+- policy: first-fit bitmap for now
+
+The physical allocator owns frame availability. It does not know kernel object
+sizes. It should not become a fine-grained object allocator.
+
+The handoff rule is page-granular: every page touched by the kernel image, boot
+allocations, or physical allocator metadata is reserved. The first reusable page
+after boot allocations is `align_up(boot.next, page_size)`, with no hidden
+padding.
+
+### Kernel Heap
+
+Decision:
+
+- module: `kernel.memory.heap`
+- import alias: `heap`
+- concept name: kernel heap
+- current implementation: pre-VM page-backed bump suballocator
+- future implementation: VM-backed reusable fine-grained allocator
+
+The module path already identifies the heap as kernel-owned. Avoid the redundant
+local name `kheap`.
+
+The heap is the kernel object allocation policy, not the physical frame
+allocator. It requests pages from `phys`, then serves smaller aligned
+allocations inside those committed pages.
+
+Current pre-VM policy:
+
+- returns identity-mapped addresses
+- lazily commits pages from `phys`
+- keeps committed pages physically contiguous so the memory map can describe
+  them with one `pre_vm_heap` region
+- does not reuse deallocated allocations yet
+- requires nonzero power-of-two alignment
+- tracks requested bytes separately from used bytes
+- exposes status codes for failed allocation diagnostics
+
+Future VM-backed policy:
+
+- reserve a kernel virtual heap range
+- map arbitrary physical frames into that range
+- replace bump-only allocation with free lists, slabs, or another reusable
+  fine-grained policy
+- preserve the external heap API where practical
+
+### Memory Map
+
+Decision:
+
+- module: `kernel.memory.map`
+- role: canonical explanation of RAM ownership during bring-up
+- storage: fixed table, no heap dependency
+- construction: collect owned regions, sort by address, fill gaps as `free_ram`
+
+Region kinds:
+
+- `free_ram`
+- `kernel_image`
+- `boot_allocator`
+- `physical_page_bitmap`
+- `pre_vm_heap`
+- `device_mmio`
+- `kernel_stack`
+
+Regions must be ordered and non-overlapping. VM setup must preserve identity
+mappings for every non-`free_ram` region until a later subsystem explicitly
+migrates or releases it.
+
+### Virtual Memory
+
+Decision:
+
+- VM is the next memory layer after physical allocation and pre-VM heap.
+- VM owns mappings, not physical frame availability and not fine-grained heap
+  policy.
+- Address spaces are kernel objects and should arrive before userspace.
+
+Near-term VM goals:
+
+- define physical-address and virtual-address naming conventions
+- identity-map the kernel image and all non-`free_ram` memory-map regions
+- establish a kernel virtual range for future heap migration
+- add page map/unmap operations with explicit rights
+- prepare user/kernel address separation
+
+## Kernel Object and Capability Model
+
+Cycor's native authority model is capability-based.
+
+A capability answers:
+
+```text
+which object?
+which rights?
+can this authority be delegated?
+can it be duplicated?
+can it be revoked?
+```
+
+Initial kernel object candidates:
 
 - `KernelObject`
 - `Capability`
@@ -298,46 +408,6 @@ Initial kernel objects:
 - `Timer`
 - `Interrupt`
 - `Device`
-
-Possible later objects:
-
-- `DmaBuffer`
-- `IoQueue`
-- `Fence`
-- `CpuSet`
-- `ResourceBudget`
-- `TraceStream`
-
-Camera-specific abstractions should initially live in userspace and be built from generic kernel objects.
-
-Example:
-
-- `FrameBuffer = SharedBuffer + userspace metadata`
-- `SensorStream = Device capability + Interrupt event + Channel`
-- `IspQueue = Device capability + SharedBuffer + Fence`
-- `PreviewFrame = SharedBuffer + Display service protocol`
-
-## 8. Capability model
-
-Capabilities are Cycor's native authority model.
-
-A capability answers:
-
-```text
-Which object?
-Which rights?
-Can this authority be delegated?
-Can it be duplicated?
-Can it be revoked?
-```
-
-Conceptual form:
-
-```text
-Capability<ObjectType, Rights>
-```
-
-This is a conceptual model. The low-level ABI may represent capabilities as handles, but the native Cyna API should expose typed capability concepts where possible.
 
 Initial rights:
 
@@ -355,18 +425,6 @@ Initial rights:
 - `Duplicate`
 - `Revoke`
 
-Examples:
-
-```text
-Capability<Channel, Send>
-Capability<Channel, Receive>
-Capability<SharedBuffer, Read | Map>
-Capability<SharedBuffer, Read | Write | Map>
-Capability<Device, Configure>
-Capability<Process, Inspect | Signal>
-Capability<Thread, Manage>
-```
-
 Rules:
 
 - A process cannot access a protected object without a capability.
@@ -375,42 +433,20 @@ Rules:
 - Capabilities may be duplicated if allowed.
 - Capabilities may be revoked if revocation authority exists.
 - Capability tables are per-process or per-protection-domain.
-- Kernel-created root capabilities are distributed by the initial system service.
-- Native Cyna APIs should expose capability rights ergonomically where possible.
+- Kernel-created root capabilities are distributed by the initial system
+  service.
 
-Camera-oriented services can receive narrow authority:
+Do not implement complex userspace services before object identity and
+capability tables exist.
 
-```text
-Sensor Service:
-    Device<Sensor>, Interrupt, SharedBuffer allocator
+## IPC and Event Model
 
-ISP Service:
-    Device<ISP>, SharedBuffer read/write, Event signal
+Decision:
 
-Preview Service:
-    Display surface, SharedBuffer read
-
-Storage Writer:
-    Storage service write, SharedBuffer read
-
-Camera App:
-    Capture service command channel
-```
-
-No service needs global system authority.
-
-## 9. IPC model
-
-Cycor IPC enables isolated services to cooperate.
-
-The IPC model should support:
-
-- message passing
-- capability transfer
-- shared buffer references
-- async waiting
-- event notification
-- service restart boundaries
+- native IPC is async-first
+- blocking APIs may later be wrappers over async primitives
+- IPC is the main way to delegate authority
+- large data moves through `SharedBuffer`, not copied IPC payloads
 
 Core objects:
 
@@ -418,28 +454,18 @@ Core objects:
 - `Message`
 - `Event`
 - `WaitSet`
+- `Timer`
 - `SharedBuffer`
 
 A message may contain:
 
 - small inline payload
 - transferred capabilities
-- references to shared buffers
+- shared buffer references
 - event/fence handles
 - protocol-specific metadata
 
-Large data should not be copied through IPC. IPC is the main way to delegate authority.
-
-Example:
-
-```text
-ServiceManager -> FakeSensor:
-    Capability<Device, Configure>
-    Capability<Channel, Send>
-    Capability<SharedBufferAllocator, Manage>
-```
-
-A wait set allows a service to wait on multiple sources:
+Wait sets allow a service to wait on multiple sources:
 
 - channel message
 - event signal
@@ -448,89 +474,10 @@ A wait set allows a service to wait on multiple sources:
 - process exit
 - buffer fence
 
-Example service loop:
+## SharedBuffer Model
 
-```text
-loop:
-    event = waitset.next()
-    handle(event)
-```
-
-Imaging example:
-
-```text
-FakeSensor -> FakeISP:
-    message: FrameReady
-    buffer: Capability<SharedBuffer, Read | Write>
-    done: Capability<Event, Signal>
-
-FakeISP -> Preview:
-    message: PreviewFrame
-    buffer: Capability<SharedBuffer, Read>
-
-FakeISP -> StorageWriter:
-    message: StoreFrame
-    buffer: Capability<SharedBuffer, Read>
-```
-
-## 10. SharedBuffer model
-
-`SharedBuffer` is a first-class Cycor kernel object for moving large data across isolated services without copying.
-
-This is essential for imaging workloads, where frame buffers may be tens or hundreds of megabytes.
-
-The kernel should support:
-
-- allocation
-- mapping into address spaces
-- rights-restricted access
-- explicit ownership or producer/consumer state
-- lifetime tracking
-- resource accounting
-- event/fence synchronization
-- DMA-related flags later
-- cache coherency controls later
-- physical contiguity constraints later
-
-Conceptual operations:
-
-```text
-create(size, flags) -> Capability<SharedBuffer, Manage | Map | Read | Write>
-map(buffer, address_space, rights) -> Mapping
-unmap(mapping)
-duplicate(buffer, reduced_rights)
-transfer(buffer, target_process)
-signal_ready(buffer, event)
-```
-
-Possible rights:
-
-- `Read`
-- `Write`
-- `Map`
-- `Transfer`
-- `Manage`
-
-Imaging flow:
-
-```text
-FakeSensor:
-    create SharedBuffer
-    fill frame-like data
-    send buffer to FakeISP
-
-FakeISP:
-    receive buffer
-    process buffer
-    send derived buffers to Preview and StorageWriter
-
-Preview:
-    read preview buffer
-
-StorageWriter:
-    read storage buffer
-    write to storage service
-```
+`SharedBuffer` is a first-class kernel object for moving large data across
+isolated services without copying.
 
 The kernel should know:
 
@@ -551,17 +498,20 @@ The kernel should not know:
 - color science
 - camera exposure policy
 
-## 11. Scheduler model
+SharedBuffer becomes important after address spaces, capabilities, IPC, and
+events exist. Do not build it first just because the product direction is
+imaging.
 
-The initial scheduler should be simple.
+## Scheduler Model
 
-Initial target:
+Initial scheduler decision:
 
-- round-robin or simple priority scheduler
+- simple round-robin or simple priority scheduler
+- thread states
 - sleep/wakeup
 - timer support
-- thread states
 - basic preemption
+- thread exit
 
 Future camera-oriented scheduling classes may include:
 
@@ -572,44 +522,37 @@ Future camera-oriented scheduling classes may include:
 - `background`
 - `maintenance`
 
-Likely priority intent:
+Policy should remain outside the kernel where possible. The kernel exposes
+mechanisms such as priority, timers, budget accounting, preemption controls, and
+trace hooks.
 
-```text
-capture-critical > preview-realtime > ui-interactive > storage-throughput > background
-```
+## Device and Driver Model
 
-Policy should remain outside the kernel where possible. The kernel should expose mechanisms:
+Decision:
 
-- priority
-- deadline hints
-- CPU affinity
-- wake events
-- budget accounting
-- preemption controls
-- resource usage measurement
-
-## 12. Device and driver model
-
-Driver hosts should run in userspace.
-
-Driver host responsibilities:
-
-- own a device capability
-- map MMIO only through kernel-approved mapping
-- receive interrupts as events
-- allocate/map DMA buffers
-- communicate with clients through channels
-- restart after failure where possible
+- drivers should run in isolated userspace driver hosts where practical
+- kernel owns device access control, MMIO mapping, interrupt routing, DMA
+  buffer authority, and fault reporting
+- userspace driver hosts own device policy and recovery behavior
 
 Kernel responsibilities:
 
 - validate device access
 - control MMIO mapping
-- route interrupts
+- route interrupts as events
 - enforce IOMMU/device isolation where available
 - track device ownership
 - revoke device capabilities
 - report device faults
+
+Driver host responsibilities:
+
+- own a device capability
+- map MMIO only through kernel-approved mappings
+- receive interrupts as events
+- allocate/map DMA buffers
+- communicate with clients through channels
+- restart after failure where possible
 
 Initial QEMU device targets:
 
@@ -621,113 +564,38 @@ Initial QEMU device targets:
 - virtio-net later
 - framebuffer later
 
-## 13. Platform strategy
+## Platform Strategy
 
-Cycor has two first-class hardware tracks:
+Product track:
 
-```text
-Product track:  AArch64 / Raspberry Pi Compute Module 5
-Research track: RISC-V64 / SiFive HiFive Unmatched
-```
+- AArch64
+- Raspberry Pi Compute Module 5
+- future CM5 camera/display/storage experiments
 
-Initial development starts in QEMU for fast iteration.
+Research track:
 
-### 13.1 Product track: AArch64 / Raspberry Pi CM5
-
-This is the main product path.
-
-Reasons:
-
-- future camera hardware is CM5-based
-- AArch64 aligns with the embedded/imaging product direction
-- CM5 supports practical camera/display carrier-board experimentation
-- CM5 can lead toward custom camera hardware later
-
-Initial CM5 goals:
-
-- serial boot
-- early logging
-- exception handling
-- timer
-- interrupt controller
-- memory management
-- simple device access
-- storage/display/input later
-
-Non-initial CM5 goals:
-
-- MIPI CSI control
-- ISP control
-- full camera stack
-- production storage pipeline
-- production display pipeline
-
-These should wait until the kernel substrate is stable.
+- RISC-V64
+- QEMU `virt`
+- SiFive HiFive Unmatched later
+- architecture validation and Cyna backend pressure
 
 Bring-up order:
 
 1. AArch64 QEMU `virt`
-2. Raspberry Pi CM5 serial boot
-3. CM5 timer/interrupt/memory stability
-4. CM5 storage/display/input
-5. CM5 camera-oriented services
-6. CM5 camera pipeline prototype
+2. RISC-V64 QEMU `virt`
+3. explicit privilege-mode ownership on both
+4. Raspberry Pi CM5 serial boot
+5. CM5 timer/interrupt/memory stability
+6. SiFive board bring-up if useful
+7. CM5 storage/display/input
+8. CM5 camera-oriented services
 
-Do not make the first milestone depend on MIPI CSI or ISP control.
+Do not make early milestones depend on MIPI CSI or ISP control.
 
-### 13.2 Research track: RISC-V64 / SiFive HiFive Unmatched
+## Imaging Direction
 
-This validates architecture independence and Cyna's RISC-V backend.
-
-Target:
-
-- RISC-V64 QEMU `virt`
-- SiFive HiFive Unmatched board
-
-Purpose:
-
-- test arch/platform separation
-- validate Cyna freestanding RISC-V code generation
-- validate trap handling
-- validate atomics and memory model
-- avoid baking ARM-only assumptions into Cycor
-
-Initial RISC-V goals:
-
-- QEMU `virt` boot
-- serial logging
-- trap handling
-- timer
-- interrupt controller
-- physical/virtual memory
-- basic scheduler
-
-Later goals:
-
-- SiFive HiFive Unmatched serial boot
-- board-specific interrupt/device support
-- storage/network experiments
-
-### 13.3 Target matrix
-
-| Tier | Target | Purpose |
-|---|---|---|
-| 0 | AArch64 QEMU `virt` | primary bring-up |
-| 0 | RISC-V64 QEMU `virt` | architecture validation |
-| 1 | Raspberry Pi CM5 | product board bring-up |
-| 1 | SiFive HiFive Unmatched | research board bring-up |
-| 2 | CM5 camera carrier | imaging prototype |
-| 3 | custom camera hardware | future product direction |
-
-### 13.4 Optional later target
-
-x86_64 may be added later for portability, but it is not a first target.
-
-## 14. Imaging direction
-
-Cycor's first product direction is camera and imaging hardware based on Raspberry Pi CM5.
-
-The kernel should not become a camera application. It should provide the substrate for an imaging OS.
+The product direction is camera and imaging hardware, but the kernel must not
+become a camera application.
 
 Future service architecture:
 
@@ -741,17 +609,8 @@ Camera App
         -> Display Service
 ```
 
-Supporting services:
-
-- Power Service
-- Thermal Service
-- Input Service
-- Settings Service
-- Gallery Service
-- Diagnostics Service
-- Trace Service
-
-The first meaningful demo should simulate the camera pipeline before real camera hardware is controlled.
+The first meaningful imaging demo should be a fake camera pipeline across
+isolated userspace services:
 
 ```text
 FakeSensor -> FakeISP -> Preview
@@ -765,34 +624,13 @@ The fake pipeline should demonstrate:
 - `SharedBuffer` frame movement
 - async events
 - trace records
-- zero large IPC copies
+- no large IPC copies
 - dropped-frame accounting
 
-Future real hardware path:
+This demo belongs after userspace, IPC, capabilities, events, and shared buffers
+exist.
 
-1. CM5 serial boot
-2. timer and interrupt stability
-3. memory stability
-4. storage path
-5. display path
-6. input path
-7. simulated capture path on real board
-8. sensor/CSI research
-9. ISP research
-10. real camera pipeline
-
-The imaging stack must be able to answer:
-
-- where did frame latency occur?
-- which service held the buffer?
-- did storage block the pipeline?
-- did preview miss a deadline?
-- did thermal policy affect capture?
-- did a driver or interrupt storm cause jitter?
-- how many copies occurred?
-- how many frames were dropped?
-
-## 15. MVP
+## MVP
 
 The MVP is not a shell.
 
@@ -805,16 +643,18 @@ FakeSensor -> FakeISP -> Preview -> StorageWriter
 MVP components:
 
 - bootable AArch64 QEMU kernel
-- early logging
+- bootable RISC-V64 QEMU kernel for parity
+- architecture privilege-mode ownership
 - physical memory manager
 - virtual memory manager
+- kernel heap
+- process/thread objects
 - basic scheduler
 - syscall entry
-- process/thread objects
 - capability table
 - channel IPC
-- shared buffer object
 - event/waitset
+- shared buffer object
 - userspace init
 - service manager
 - fake sensor service
@@ -823,17 +663,6 @@ MVP components:
 - fake storage writer
 - trace/log service
 
-Example output:
-
-```text
-[frame 1024] sensor produced buffer=84 size=48MB
-[frame 1024] isp completed in 4.2ms
-[frame 1024] preview displayed
-[frame 1024] storage write completed in 7.6ms
-[frame 1024] end-to-end latency 13.1ms
-[frame 1024] copies=0 dropped=0
-```
-
 MVP success criteria:
 
 - kernel boots in QEMU
@@ -841,127 +670,157 @@ MVP success criteria:
 - services run in isolated processes
 - capabilities restrict access between services
 - IPC transfers capabilities
-- `SharedBuffer` moves frame-like data without copies
+- `SharedBuffer` moves frame-like data without large copies
 - fake camera pipeline emits latency traces
 - the system shows why a frame was delayed, dropped, or completed
 
-## 16. Roadmap
+## Roadmap
 
-### Phase 0 — Repository and specification
+The roadmap is the execution order for kernel work. Earlier incomplete phases
+take priority over later features unless a later experiment explicitly validates
+an earlier design.
+
+Current status:
+
+- QEMU AArch64 boots and reaches kernel selftests.
+- QEMU RISC-V64 boots and reaches kernel selftests.
+- Both QEMU targets still rely on convenient direct kernel entry.
+- Physical allocation, pre-VM heap, memory-map ownership, and heap diagnostics
+  exist.
+- VM is not implemented.
+- Kernel objects, capabilities, scheduler, userspace, IPC, and shared buffers
+  are not implemented.
+
+### Phase 0 — Specification and Repo Shape
 
 Goal:
 
 ```text
-Define the project before writing too much kernel code.
+Make direction and decisions explicit enough to guide implementation.
+```
+
+Done when:
+
+- spec explains architecture and kernel shape
+- spec records subsystem decisions
+- spec records portability model
+- roadmap points to the next layer
+
+### Phase 1 — QEMU Boot and Platform Parity
+
+Goal:
+
+```text
+Boot both first-class QEMU targets and keep them green.
+```
+
+Targets:
+
+- `qemu-system-aarch64 -machine virt`
+- `qemu-system-riscv64 -machine virt`
+
+Done:
+
+- direct QEMU kernel entry
+- serial logging
+- panic path
+- basic exception/trap vector
+- boot selftests
+
+Still incomplete:
+
+- explicit AArch64 EL transition
+- explicit RISC-V M-mode to S-mode transition
+
+### Phase 2 — Privilege-Mode Ownership
+
+Goal:
+
+```text
+Enter and own the intended kernel privilege mode on each architecture.
+```
+
+AArch64 deliverables:
+
+- read `CurrentEL`
+- transition EL3/EL2 to EL1 when required
+- set EL1 stack
+- set `VBAR_EL1`
+- document register ownership before common kernel entry
+
+RISC-V deliverables:
+
+- split `_start` into M-mode shim and S-mode kernel entry
+- configure trap/interrupt delegation
+- configure PMP for kernel RAM access
+- enter S-mode with `mret`
+- set `stvec` for S-mode traps
+- document M-mode responsibilities left behind
+
+### Phase 3 — Memory Foundation
+
+Goal:
+
+```text
+Provide memory primitives strong enough for VM and kernel objects.
+```
+
+Done:
+
+- boot bump allocator
+- physical page allocator
+- pre-VM heap
+- memory map with sorted owned regions
+- heap diagnostics
+- AArch64/RISC-V boot checks
+
+Next:
+
+- physical-address and virtual-address naming conventions
+- page-table abstractions per architecture
+- kernel identity mapping from memory map
+- kernel virtual heap range
+- transition heap from pre-VM physical identity mapping to VM-backed virtual
+  mapping
+
+### Phase 4 — Virtual Memory and Address Spaces
+
+Goal:
+
+```text
+Map kernel and user memory explicitly.
 ```
 
 Deliverables:
 
-- `README.md`
-- `docs/SPEC.md`
+- page-table creation
+- map/unmap operations
+- kernel address-space bootstrap
+- identity mapping for boot-owned regions
+- kernel heap virtual range
+- user/kernel memory split
+- address-space object draft
 
-### Phase 1 — AArch64 QEMU boot
-
-Goal:
-
-```text
-Boot into Cycor kernel code on qemu-system-aarch64 -machine virt.
-```
-
-Features:
-
-- boot path
-- early serial logging
-- panic handler
-- exception vector setup
-- basic memory map
-- early allocator
-- minimal test harness
-
-### Phase 2 — RISC-V64 QEMU boot
+### Phase 5 — Kernel Objects and Capabilities
 
 Goal:
 
 ```text
-Boot into Cycor kernel code on qemu-system-riscv64 -machine virt.
+Represent object identity, lifetime, and authority.
 ```
 
-Features:
+Deliverables:
 
-- boot path
-- serial logging
-- trap handler
-- panic handler
-- basic memory map
-- early allocator
-- minimal test harness
-
-### Phase 3 — Memory foundation
-
-Goal:
-
-```text
-Manage memory safely enough to support kernel objects and tasks.
-```
-
-Early boot uses a bounded bump allocator starting at the page-aligned kernel
-end and ending at the platform RAM limit. The bump allocator is only for early
-metadata. The physical page allocator reserves its bitmap through the bump
-allocator, snapshots the consumed range, then freezes the bump allocator.
-
-The handoff rule is page-granular: every page touched by the kernel image,
-early boot allocations, or physical allocator metadata is reserved. The first
-reusable page after boot allocations is `align_up(boot.next, page_size)`, with
-no extra hidden padding.
-
-The early memory map is the canonical explanation of RAM ownership during
-bring-up. It uses simple names:
-
-- `free_ram`
-- `kernel_image`
-- `boot_allocator`
-- `physical_page_bitmap`
-- `early_kheap`
-- `device_mmio`
-- `kernel_stack`
-
-Regions in the table must be non-overlapping and ordered. VM setup should use
-the map to preserve identity mappings for every non-`free_ram` region until a
-later subsystem explicitly migrates or releases it.
-
-During early boot the map is stored in a small fixed table. It must not depend
-on heap allocation, because the heap policy itself is derived from this map and
-from the physical page allocator state.
-
-Features:
-
-- physical page allocator
-- virtual memory manager
-- kernel heap or slab allocator
-- address space abstraction
-- page mapping/unmapping
-- user/kernel memory separation draft
-
-### Phase 4 — Kernel objects and capabilities
-
-Goal:
-
-```text
-Represent authority and object lifetime.
-```
-
-Features:
-
-- `KernelObject`
-- object IDs
+- kernel object IDs
+- object table
 - capability table
-- rights checking
+- rights checks
 - capability duplication
 - capability transfer draft
-- object refcount/lifetime
-- capability revocation draft
+- object lifetime/refcount model
+- revocation draft
 
-### Phase 5 — Threads and scheduler
+### Phase 6 — Threads, Timers, and Scheduler
 
 Goal:
 
@@ -969,9 +828,9 @@ Goal:
 Run multiple execution contexts.
 ```
 
-Features:
+Deliverables:
 
-- thread creation
+- thread object
 - context switch
 - scheduler loop
 - timer interrupt
@@ -979,7 +838,7 @@ Features:
 - basic priority
 - thread exit
 
-### Phase 6 — Userspace and syscalls
+### Phase 7 — Userspace and Syscalls
 
 Goal:
 
@@ -987,7 +846,7 @@ Goal:
 Run the first userspace process.
 ```
 
-Features:
+Deliverables:
 
 - user address space
 - executable loader
@@ -997,7 +856,7 @@ Features:
 - init process
 - debug output syscall or debug channel
 
-### Phase 7 — IPC and events
+### Phase 8 — IPC and Events
 
 Goal:
 
@@ -1005,72 +864,59 @@ Goal:
 Enable service architecture.
 ```
 
-Features:
+Deliverables:
 
-- `Channel`
+- channel object
 - message send/receive
 - capability transfer over IPC
-- `Event`
-- `WaitSet`
-- `Timer`
+- event object
+- wait set
+- timer event
 - async wait primitive
 
-### Phase 8 — SharedBuffer
+### Phase 9 — SharedBuffer
 
 Goal:
 
 ```text
-Move large frame-like data without copies.
+Move frame-like data without large copies.
 ```
 
-Features:
+Deliverables:
 
-- `SharedBuffer` object
+- shared buffer object
 - map/unmap into processes
 - rights-controlled buffer access
-- buffer transfer over IPC
+- transfer over IPC
 - basic fence/event synchronization
 - resource accounting
 
-### Phase 9 — Service manager
+### Phase 10 — Service Manager and Driver Hosts
 
 Goal:
 
 ```text
-Start, supervise, and restart userspace services.
+Start, supervise, and isolate userspace services.
 ```
 
-Features:
+Deliverables:
 
 - init service
 - service spawning
 - capability distribution
 - service crash reporting
 - restart policy
-- log/trace service
-
-### Phase 10 — Userspace driver host
-
-Goal:
-
-```text
-Prove isolated drivers.
-```
-
-Features:
-
 - device capability
 - MMIO mapping
 - interrupt event delivery
 - virtio driver prototype
-- driver crash/restart
 
-### Phase 11 — Fake camera pipeline
+### Phase 11 — Fake Imaging Pipeline
 
 Goal:
 
 ```text
-Demonstrate Cycor's imaging direction.
+Demonstrate Cycor's product direction without real camera hardware.
 ```
 
 Services:
@@ -1087,13 +933,13 @@ Success:
 - no large IPC copies
 - services are isolated
 - capabilities restrict authority
-- trace output reports latency and ownership
+- trace output reports latency, ownership, and drops
 
-## 17. Hard constraints
+## Hard Constraints
 
 - native API is capability-based
 - native API is async/event-oriented
-- no ioctl-style untyped escape hatch
+- no ioctl-style untyped escape hatch as the native model
 - drivers are userspace by default
 - kernel object access always checks rights
 - `SharedBuffer` is first-class
@@ -1102,19 +948,37 @@ Success:
 - camera use cases influence the core but do not pollute it
 - Cyna ergonomics are part of the success criteria
 
-## 18. Glossary
+## Glossary
+
+### Architecture
+
+CPU family behavior such as privilege levels, traps, page tables, atomics,
+barriers, and context switching.
+
+### Platform
+
+Board, SoC, or virtual machine behavior such as memory layout, UART addresses,
+interrupt-controller instance, and boot-device quirks.
 
 ### AArch64
 
-64-bit Arm architecture. Cycor's primary product architecture because Raspberry Pi CM5 is Arm-based.
+64-bit Arm architecture. Cycor's primary product architecture because Raspberry
+Pi CM5 is Arm-based.
+
+### RISC-V64
+
+64-bit RISC-V architecture. Cycor's research architecture for portability and
+Cyna backend validation.
 
 ### Cyna
 
-The systems programming language in the Neucine ecosystem. Cycor is intended to be written primarily in Cyna.
+The systems programming language in the Neucine ecosystem. Cycor is intended to
+be written primarily in Cyna.
 
 ### Cycor
 
-Pronounced Sai-core. A Cyna-native capability kernel substrate for language demonstration and future camera/imaging hardware.
+Pronounced Sai-core. A Cyna-native capability kernel substrate for language
+demonstration and future camera/imaging hardware.
 
 ### Capability
 
@@ -1130,24 +994,21 @@ A kernel object that can be signaled and waited on.
 
 ### WaitSet
 
-An object allowing a task or service to wait on multiple events, channels, timers, or completions.
+An object allowing a task or service to wait on multiple events, channels,
+timers, or completions.
 
 ### SharedBuffer
 
-A first-class kernel object for zero-copy sharing of large buffers between isolated services.
+A first-class kernel object for zero-copy sharing of large buffers between
+isolated services.
 
-### Product track
+### Pre-VM Heap
 
-The AArch64 / Raspberry Pi CM5 path intended for future camera and imaging hardware.
+The temporary kernel heap policy used before virtual memory owns heap mappings.
+It is backed by physical pages and must be preserved in the memory map as
+`pre_vm_heap`.
 
-### Research track
+### Kernel Substrate
 
-The RISC-V64 / SiFive HiFive Unmatched path intended for architecture validation and kernel experimentation.
-
-### Service
-
-A userspace component that implements policy or device behavior above the kernel substrate.
-
-### Kernel substrate
-
-The minimal privileged layer that provides machine mechanisms but avoids embedding product policy.
+The minimal privileged layer that provides machine mechanisms while avoiding
+product policy.

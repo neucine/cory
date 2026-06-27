@@ -1,4 +1,5 @@
 import .kernel.memory.boot;
+import .kernel.memory.heap;
 import { Layout } from .kernel.memory.layout;
 import .kernel.memory.map as memory_map;
 import .kernel.memory.phys;
@@ -120,6 +121,89 @@ pub fn run_phys_tests(map: Layout): void {
     }
 }
 
+pub fn run_heap_tests(map: Layout): void {
+    const before = phys.snapshot();
+    const first = heap.allocate(64, 16);
+    if first == 0 {
+        fail("selftest: heap first alloc");
+    }
+    if (first & 15) != 0 {
+        fail("selftest: heap first align");
+    }
+    if first < map.ram_start {
+        fail("selftest: heap first low bound");
+    }
+    if first >= map.ram_end {
+        fail("selftest: heap first high bound");
+    }
+
+    const second = heap.allocate(map.page_size + 32, map.page_size);
+    if second == 0 {
+        fail("selftest: heap second alloc");
+    }
+    if (second & (map.page_size - 1)) != 0 {
+        fail("selftest: heap page align");
+    }
+    if second <= first {
+        fail("selftest: heap ordering");
+    }
+
+    const heap_used = heap.snapshot();
+    if heap_used.page_size != map.page_size {
+        fail("selftest: heap page size");
+    }
+    if heap_used.committed_pages < 2 {
+        fail("selftest: heap committed pages");
+    }
+    if heap_used.start == 0 {
+        fail("selftest: heap start");
+    }
+    if heap_used.end <= heap_used.start {
+        fail("selftest: heap range");
+    }
+    if heap_used.next <= heap_used.start {
+        fail("selftest: heap next");
+    }
+    if heap_used.used_bytes != heap_used.next - heap_used.start {
+        fail("selftest: heap used bytes");
+    }
+    if heap_used.used_bytes < heap_used.requested_bytes {
+        fail("selftest: heap used below requested");
+    }
+    if heap_used.requested_bytes != map.page_size + 96 {
+        fail("selftest: heap requested bytes");
+    }
+    if heap.allocate(1, 0) != 0 {
+        fail("selftest: heap zero align");
+    }
+    if heap.status() != heap.status_invalid_alignment {
+        fail("selftest: heap zero align status");
+    }
+    if heap.allocate(1, 24) != 0 {
+        fail("selftest: heap non-power align");
+    }
+    if heap.status() != heap.status_invalid_alignment {
+        fail("selftest: heap non-power align status");
+    }
+    if heap.allocate(0 - 1, map.page_size) != 0 {
+        fail("selftest: heap overflow");
+    }
+    if heap.status() != heap.status_address_overflow {
+        fail("selftest: heap overflow status");
+    }
+    if heap.deallocate(first) {
+        fail("selftest: heap free unsupported");
+    }
+    if heap.status() != heap.status_deallocate_unsupported {
+        fail("selftest: heap free unsupported status");
+    }
+
+    const after = phys.snapshot();
+    if after.free_pages + heap_used.committed_pages != before.free_pages {
+        fail("selftest: heap phys page count");
+    }
+}
+
 pub fn run_memory_map_tests(map: Layout): void {
     const snapshot = memory_map.snapshot();
     if snapshot.region_count < 4 {
@@ -136,6 +220,7 @@ pub fn run_memory_map_tests(map: Layout): void {
     var saw_kernel = false;
     var saw_boot = false;
     var saw_bitmap = false;
+    var saw_heap = false;
     while index < memory_map.count() {
         const region = memory_map.get(index);
         if region.start >= region.end {
@@ -173,6 +258,12 @@ pub fn run_memory_map_tests(map: Layout): void {
                 fail("selftest: bitmap identity");
             }
         }
+        if region.kind == memory_map.kind_pre_vm_heap {
+            saw_heap = true;
+            if !memory_map.needs_identity_mapping(region.kind) {
+                fail("selftest: heap identity");
+            }
+        }
 
         index = index + 1;
     }
@@ -185,5 +276,8 @@ pub fn run_memory_map_tests(map: Layout): void {
     }
     if !saw_bitmap {
         fail("selftest: memory map bitmap region");
+    }
+    if !saw_heap {
+        fail("selftest: memory map heap region");
     }
 }
