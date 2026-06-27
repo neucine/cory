@@ -1,4 +1,5 @@
 import .kernel.arch.riscv64.trap_frame;
+import .kernel.console;
 import .kernel.panic as panic_mod;
 
 extern c {
@@ -19,12 +20,12 @@ export c fn cycor_arch_trap_entry(scause: c_ulong, sepc: c_ulong, stval: c_ulong
     const frame = trap_frame.diagnostic(scause, sepc, stval, sstatus);
     println("exception: unhandled riscv64");
     println("exception: scause");
-    println(frame.scause);
+    console.println_hex(frame.scause);
     println("exception: sepc");
-    println(frame.sepc);
+    console.println_hex(frame.sepc);
     println("exception: stval");
-    println(frame.stval);
+    console.println_hex(frame.stval);
     println("exception: sstatus");
-    println(frame.sstatus);
+    console.println_hex(frame.sstatus);
     panic_mod.panic();
 }
