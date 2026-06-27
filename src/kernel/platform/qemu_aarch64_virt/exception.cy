@@ -1,3 +1,4 @@
+import .kernel.arch.aarch64.trap_frame;
 import .kernel.panic as panic_mod;
 
 extern c {
@@ -20,14 +21,15 @@ pub fn init(): void {
 }
 
 export c fn cycor_arch_exception_entry(esr: c_ulong, elr: c_ulong, far: c_ulong, spsr: c_ulong): void = "cycor_arch_exception_entry" {
+    const frame = trap_frame.diagnostic(esr, elr, far, spsr);
     println("exception: unhandled aarch64");
     println("exception: esr_el1");
-    println(esr as usize);
+    println(frame.esr_el1);
     println("exception: elr_el1");
-    println(elr as usize);
+    println(frame.elr_el1);
     println("exception: far_el1");
-    println(far as usize);
+    println(frame.far_el1);
     println("exception: spsr_el1");
-    println(spsr as usize);
+    println(frame.spsr_el1);
     panic_mod.panic();
 }

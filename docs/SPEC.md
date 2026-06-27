@@ -221,6 +221,33 @@ Both QEMU targets should keep boot checks working. Platform parity bugs are
 valuable because they reveal hidden assumptions in Cyna, the linker, runtime
 builtins, or Cycor's architecture split.
 
+## Trap-State Model
+
+Cycor separates panic diagnostics from recoverable trap frames.
+
+The current boot-stage vectors are panic-only. They capture a diagnostic frame
+and call into Cyna with C ABI carrier values:
+
+| Architecture | Diagnostic frame |
+|---|---|
+| AArch64 | `ESR_EL1`, `ELR_EL1`, `FAR_EL1`, `SPSR_EL1` |
+| RISC-V64 | `scause`, `sepc`, `stval`, `sstatus` |
+
+Diagnostic frames explain why the kernel stopped. They are not enough to resume
+execution, schedule a thread, handle a syscall, or return to userspace.
+
+Recoverable traps require a full architecture trap frame:
+
+- AArch64: `x0..x30`, interrupted `sp`, `ELR_EL1`, `SPSR_EL1`, `ESR_EL1`,
+  `FAR_EL1`
+- RISC-V64: integer registers `x1..x31` using ABI names, plus `sepc`,
+  `sstatus`, `scause`, `stval`
+
+Architecture assembly owns the raw save/restore order. Architecture Cyna modules
+own the named frame shape. Platform code may print diagnostics, but common
+kernel code should eventually receive typed trap frames rather than raw CSR or
+system-register dumps.
+
 ## Privilege-Mode Decision
 
 Cycor should run the kernel in the normal OS privilege level for each
