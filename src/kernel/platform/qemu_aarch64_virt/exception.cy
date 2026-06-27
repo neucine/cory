@@ -1,4 +1,5 @@
 import .kernel.arch.aarch64.trap_frame;
+import { TrapFrame } from .kernel.arch.aarch64.trap_frame;
 import .kernel.console;
 import .kernel.panic as panic_mod;
 
@@ -21,8 +22,8 @@ pub fn init(): void {
     println("exception: vectors ready");
 }
 
-export c fn cycor_arch_exception_entry(esr: c_ulong, elr: c_ulong, far: c_ulong, spsr: c_ulong): void = "cycor_arch_exception_entry" {
-    const frame = trap_frame.diagnostic(esr, elr, far, spsr);
+export c fn cycor_arch_exception_entry(raw_frame: *TrapFrame): void = "cycor_arch_exception_entry" {
+    const frame = trap_frame.diagnostic_from_frame(raw_frame);
     println("exception: unhandled aarch64");
     println("exception: esr_el1");
     console.println_hex(frame.esr_el1);

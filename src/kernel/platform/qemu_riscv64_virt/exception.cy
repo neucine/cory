@@ -1,4 +1,5 @@
 import .kernel.arch.riscv64.trap_frame;
+import { TrapFrame } from .kernel.arch.riscv64.trap_frame;
 import .kernel.console;
 import .kernel.panic as panic_mod;
 
@@ -16,8 +17,8 @@ pub fn init(): void {
     println("exception: vectors ready");
 }
 
-export c fn cycor_arch_trap_entry(scause: c_ulong, sepc: c_ulong, stval: c_ulong, sstatus: c_ulong): void = "cycor_arch_trap_entry" {
-    const frame = trap_frame.diagnostic(scause, sepc, stval, sstatus);
+export c fn cycor_arch_trap_entry(raw_frame: *TrapFrame): void = "cycor_arch_trap_entry" {
+    const frame = trap_frame.diagnostic_from_frame(raw_frame);
     println("exception: unhandled riscv64");
     println("exception: scause");
     console.println_hex(frame.scause);

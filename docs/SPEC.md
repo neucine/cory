@@ -248,6 +248,16 @@ own the named frame shape. Platform code may print diagnostics, but common
 kernel code should eventually receive typed trap frames rather than raw CSR or
 system-register dumps.
 
+Current implementation status:
+
+- AArch64 and RISC-V64 vectors save full integer trap frames on the active stack.
+- The saved frame layout is a C ABI contract between architecture assembly and
+  the architecture `trap_frame.cy` module.
+- Cyna receives a pointer to the saved frame and derives the current diagnostic
+  output from that frame.
+- Trap return, register restore, syscall dispatch, page-fault recovery, and
+  user-mode return are not implemented yet.
+
 Normal boot must never depend on deliberately taking a trap. Diagnostic trap
 coverage lives in opt-in QEMU manifests:
 
@@ -779,7 +789,7 @@ Still incomplete:
 
 - AArch64 EL3 entry path and fuller EL2 policy
 - fuller RISC-V trap/interrupt delegation policy
-- trap-frame save/restore for recoverable kernel and user traps
+- trap-frame restore for recoverable kernel and user traps
 
 ### Phase 2 — Privilege-Mode Ownership
 
