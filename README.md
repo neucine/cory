@@ -98,3 +98,19 @@ available, run:
 qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cycor.elf
 qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cycor-riscv64.elf
 ```
+
+## Trap diagnostic probes
+
+Normal boot must not deliberately panic. Trap diagnostics are tested through
+separate opt-in manifests:
+
+```text
+~/.cyna/0.1.8/bin/cyna build cyna.traptest.toml
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cycor-traptest.elf
+
+~/.cyna/0.1.8/bin/cyna build cyna.traptest.riscv64.toml
+qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cycor-traptest-riscv64.elf
+```
+
+These images intentionally execute `brk` on AArch64 or `ebreak` on RISC-V64,
+print captured architecture trap state, then panic.

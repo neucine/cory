@@ -248,6 +248,14 @@ own the named frame shape. Platform code may print diagnostics, but common
 kernel code should eventually receive typed trap frames rather than raw CSR or
 system-register dumps.
 
+Normal boot must never depend on deliberately taking a trap. Diagnostic trap
+coverage lives in opt-in QEMU manifests:
+
+- `cyna.traptest.toml` builds an AArch64 image that executes `brk`
+- `cyna.traptest.riscv64.toml` builds a RISC-V64 image that executes `ebreak`
+
+Those images are expected to print the diagnostic frame and then panic.
+
 ## Privilege-Mode Decision
 
 Cycor should run the kernel in the normal OS privilege level for each
@@ -762,6 +770,7 @@ Done:
 - serial logging
 - panic path
 - basic exception/trap vector with diagnostic state capture
+- opt-in deliberate trap probes for both QEMU targets
 - boot selftests
 - RISC-V M-mode shim enters S-mode before common kernel entry
 - AArch64 EL2 entry drops to EL1 before common kernel entry

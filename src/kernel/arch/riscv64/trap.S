@@ -27,3 +27,11 @@ cycor_arch_abi_probe_value:
     # Returns a fixed scalar in a0 so Cyna can verify extern c return lowering.
     li a0, 12648430
     ret
+
+.global cycor_arch_trigger_test_trap
+.type cycor_arch_trigger_test_trap, @function
+cycor_arch_trigger_test_trap:
+    # C ABI: void cycor_arch_trigger_test_trap(void)
+    # Opt-in trap-test entry point. Normal boot manifests do not call it.
+    ebreak
+    ret

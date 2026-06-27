@@ -62,3 +62,11 @@ cycor_arch_current_el:
     mrs x0, CurrentEL
     lsr x0, x0, #2
     ret
+
+.global cycor_arch_trigger_test_trap
+.type cycor_arch_trigger_test_trap, %function
+cycor_arch_trigger_test_trap:
+    // C ABI: void cycor_arch_trigger_test_trap(void)
+    // Opt-in trap-test entry point. Normal boot manifests do not call it.
+    brk #0
+    ret
