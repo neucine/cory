@@ -3,6 +3,29 @@
 .global cycor_arch_exception_vectors
 .type cycor_arch_exception_vectors, %function
 
+.equ TF_X0, 0
+.equ TF_X2, 16
+.equ TF_X4, 32
+.equ TF_X6, 48
+.equ TF_X8, 64
+.equ TF_X10, 80
+.equ TF_X12, 96
+.equ TF_X14, 112
+.equ TF_X16, 128
+.equ TF_X18, 144
+.equ TF_X20, 160
+.equ TF_X22, 176
+.equ TF_X24, 192
+.equ TF_X26, 208
+.equ TF_X28, 224
+.equ TF_X30, 240
+.equ TF_SP, 248
+.equ TF_ELR_EL1, 256
+.equ TF_SPSR_EL1, 264
+.equ TF_ESR_EL1, 272
+.equ TF_FAR_EL1, 280
+.equ TF_SIZE, 288
+
 .macro vector_slot
     b cycor_arch_exception_vector_entry
     .balign 128
@@ -28,33 +51,35 @@ cycor_arch_exception_vectors:
 
 .type cycor_arch_exception_vector_entry, %function
 cycor_arch_exception_vector_entry:
-    sub sp, sp, #288
-    stp x0, x1, [sp, #0]
-    stp x2, x3, [sp, #16]
-    stp x4, x5, [sp, #32]
-    stp x6, x7, [sp, #48]
-    stp x8, x9, [sp, #64]
-    stp x10, x11, [sp, #80]
-    stp x12, x13, [sp, #96]
-    stp x14, x15, [sp, #112]
-    stp x16, x17, [sp, #128]
-    stp x18, x19, [sp, #144]
-    stp x20, x21, [sp, #160]
-    stp x22, x23, [sp, #176]
-    stp x24, x25, [sp, #192]
-    stp x26, x27, [sp, #208]
-    stp x28, x29, [sp, #224]
-    str x30, [sp, #240]
-    add x0, sp, #288
-    str x0, [sp, #248]
+    // TrapFrame layout mirrors arch/aarch64/trap_frame.cy. These offsets are
+    // an ABI between this assembly save path and the Cyna cstruct.
+    sub sp, sp, #TF_SIZE
+    stp x0, x1, [sp, #TF_X0]
+    stp x2, x3, [sp, #TF_X2]
+    stp x4, x5, [sp, #TF_X4]
+    stp x6, x7, [sp, #TF_X6]
+    stp x8, x9, [sp, #TF_X8]
+    stp x10, x11, [sp, #TF_X10]
+    stp x12, x13, [sp, #TF_X12]
+    stp x14, x15, [sp, #TF_X14]
+    stp x16, x17, [sp, #TF_X16]
+    stp x18, x19, [sp, #TF_X18]
+    stp x20, x21, [sp, #TF_X20]
+    stp x22, x23, [sp, #TF_X22]
+    stp x24, x25, [sp, #TF_X24]
+    stp x26, x27, [sp, #TF_X26]
+    stp x28, x29, [sp, #TF_X28]
+    str x30, [sp, #TF_X30]
+    add x0, sp, #TF_SIZE
+    str x0, [sp, #TF_SP]
     mrs x0, elr_el1
-    str x0, [sp, #256]
+    str x0, [sp, #TF_ELR_EL1]
     mrs x0, spsr_el1
-    str x0, [sp, #264]
+    str x0, [sp, #TF_SPSR_EL1]
     mrs x0, esr_el1
-    str x0, [sp, #272]
+    str x0, [sp, #TF_ESR_EL1]
     mrs x0, far_el1
-    str x0, [sp, #280]
+    str x0, [sp, #TF_FAR_EL1]
     mov x0, sp
     bl cycor_arch_exception_entry
 1:
