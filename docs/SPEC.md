@@ -258,6 +258,16 @@ Current implementation status:
 - Trap return, register restore, syscall dispatch, page-fault recovery, and
   user-mode return are not implemented yet.
 
+Cyna pressure point:
+
+- Cycor needs compile-time `sizeof`, `alignof`, and `offsetof`-style layout
+  introspection for C-layout structs.
+- Without it, the trap-frame ABI between assembly `TF_*` constants and Cyna
+  `cstruct` fields can be documented and tested through QEMU trap probes, but
+  cannot be mechanically asserted inside Cyna.
+- Do not silently work around this with another duplicate source of truth unless
+  the tradeoff is explicitly documented.
+
 Normal boot must never depend on deliberately taking a trap. Diagnostic trap
 coverage lives in opt-in QEMU manifests:
 

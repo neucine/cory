@@ -16,6 +16,11 @@ pub struct ExceptionDiagnosticFrame {
 // Assembly saves this frame directly on the active exception stack before
 // calling Cyna. Field order is therefore an ABI between exception.S and this
 // module; append or reorder fields only together with the assembly offsets.
+//
+// Cyna gap: this should eventually have compile-time sizeof/offsetof checks
+// against the assembly TF_* constants. The language does not currently expose
+// that layout introspection surface, so the contract is documented but not
+// mechanically checked from Cyna yet.
 pub cstruct TrapFrame {
     x0: c_ulong;
     x1: c_ulong;

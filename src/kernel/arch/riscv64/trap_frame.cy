@@ -16,6 +16,11 @@ pub struct TrapDiagnosticFrame {
 // Assembly saves this frame directly on the active trap stack before calling
 // Cyna. Field order is therefore an ABI between trap.S and this module; append
 // or reorder fields only together with the assembly offsets.
+//
+// Cyna gap: this should eventually have compile-time sizeof/offsetof checks
+// against the assembly TF_* constants. The language does not currently expose
+// that layout introspection surface, so the contract is documented but not
+// mechanically checked from Cyna yet.
 pub cstruct TrapFrame {
     ra: c_ulong;
     sp: c_ulong;
