@@ -44,6 +44,9 @@ cycor_aarch64_enter_el1_from_el2:
 .global cycor_aarch64_el1_entry
 .type cycor_aarch64_el1_entry, %function
 cycor_aarch64_el1_entry:
+    // First instruction in the normalized EL1 kernel contract. Whether QEMU
+    // entered at EL1 directly or at EL2 and returned with eret, Cyna code starts
+    // below this label and should not need to branch on CurrentEL.
     ldr x0, =__stack_top
     mov sp, x0
     bl cycor_kernel_entry
@@ -51,3 +54,30 @@ cycor_aarch64_el1_entry:
 1:
     wfe
     b 1b
+
+.global cycor_aarch64_activate_identity_vm
+.type cycor_aarch64_activate_identity_vm, %function
+cycor_aarch64_activate_identity_vm:
+    // C ABI:
+    //   x0 = TTBR0_EL1 root table address
+    //   x1 = MAIR_EL1 value
+    //   x2 = TCR_EL1 value
+    //   x3 = SCTLR_EL1 bits to set
+    dsb sy
+    msr mair_el1, x1
+    msr tcr_el1, x2
+    msr ttbr0_el1, x0
+    isb
+    tlbi vmalle1
+    dsb ish
+    isb
+    mrs x4, sctlr_el1
+    // The current linker exposes one kernel_image range that is temporarily
+    // RWX. Clear WXN for this bootstrap phase; section-level W^X mappings will
+    // allow enabling it later.
+    mov x7, #(1 << 19)
+    bic x4, x4, x7
+    orr x4, x4, x3
+    msr sctlr_el1, x4
+    isb
+    ret

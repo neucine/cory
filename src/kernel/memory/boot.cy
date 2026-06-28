@@ -1,6 +1,4 @@
-extern c {
-    const __kernel_end: *u8 = "__kernel_end";
-}
+extern c("__kernel_end") const __kernel_end: *u8;
 
 pub struct Snapshot {
     pub start: usize;

@@ -17,10 +17,6 @@ pub struct ExceptionDiagnosticFrame {
 // calling Cyna. Field order is therefore an ABI between exception.S and this
 // module; append or reorder fields only together with the assembly offsets.
 //
-// Cyna gap: this should eventually have compile-time sizeof/offsetof checks
-// against the assembly TF_* constants. The language does not currently expose
-// that layout introspection surface, so the contract is documented but not
-// mechanically checked from Cyna yet.
 pub cstruct TrapFrame {
     x0: c_ulong;
     x1: c_ulong;
@@ -60,6 +56,59 @@ pub cstruct TrapFrame {
     far_el1: c_ulong;
 }
 
+// Public layout constants are materialized from Cyna's target C ABI metadata.
+// They are the Cyna-side source for trap-frame layout checks. The `export asm`
+// constants below are the assembly boundary; Cyna emits them as `.equ` values
+// and injects the generated include into exception.S during native builds.
+// `verify_layout` remains a boot-time guard that catches drift before exception
+// vectors are installed.
+pub const trap_frame_size: usize = comptime TrapFrame.size;
+pub const trap_frame_align: usize = comptime TrapFrame.align;
+pub const trap_frame_x0_offset: usize = comptime TrapFrame.field.x0.offset;
+pub const trap_frame_x2_offset: usize = comptime TrapFrame.field.x2.offset;
+pub const trap_frame_x4_offset: usize = comptime TrapFrame.field.x4.offset;
+pub const trap_frame_x6_offset: usize = comptime TrapFrame.field.x6.offset;
+pub const trap_frame_x8_offset: usize = comptime TrapFrame.field.x8.offset;
+pub const trap_frame_x10_offset: usize = comptime TrapFrame.field.x10.offset;
+pub const trap_frame_x12_offset: usize = comptime TrapFrame.field.x12.offset;
+pub const trap_frame_x14_offset: usize = comptime TrapFrame.field.x14.offset;
+pub const trap_frame_x16_offset: usize = comptime TrapFrame.field.x16.offset;
+pub const trap_frame_x18_offset: usize = comptime TrapFrame.field.x18.offset;
+pub const trap_frame_x20_offset: usize = comptime TrapFrame.field.x20.offset;
+pub const trap_frame_x22_offset: usize = comptime TrapFrame.field.x22.offset;
+pub const trap_frame_x24_offset: usize = comptime TrapFrame.field.x24.offset;
+pub const trap_frame_x26_offset: usize = comptime TrapFrame.field.x26.offset;
+pub const trap_frame_x28_offset: usize = comptime TrapFrame.field.x28.offset;
+pub const trap_frame_x30_offset: usize = comptime TrapFrame.field.x30.offset;
+pub const trap_frame_sp_offset: usize = comptime TrapFrame.field.sp.offset;
+pub const trap_frame_elr_el1_offset: usize = comptime TrapFrame.field.elr_el1.offset;
+pub const trap_frame_spsr_el1_offset: usize = comptime TrapFrame.field.spsr_el1.offset;
+pub const trap_frame_esr_el1_offset: usize = comptime TrapFrame.field.esr_el1.offset;
+pub const trap_frame_far_el1_offset: usize = comptime TrapFrame.field.far_el1.offset;
+
+export asm("TF_X0") const trap_frame_asm_x0: usize = comptime TrapFrame.field.x0.offset;
+export asm("TF_X2") const trap_frame_asm_x2: usize = comptime TrapFrame.field.x2.offset;
+export asm("TF_X4") const trap_frame_asm_x4: usize = comptime TrapFrame.field.x4.offset;
+export asm("TF_X6") const trap_frame_asm_x6: usize = comptime TrapFrame.field.x6.offset;
+export asm("TF_X8") const trap_frame_asm_x8: usize = comptime TrapFrame.field.x8.offset;
+export asm("TF_X10") const trap_frame_asm_x10: usize = comptime TrapFrame.field.x10.offset;
+export asm("TF_X12") const trap_frame_asm_x12: usize = comptime TrapFrame.field.x12.offset;
+export asm("TF_X14") const trap_frame_asm_x14: usize = comptime TrapFrame.field.x14.offset;
+export asm("TF_X16") const trap_frame_asm_x16: usize = comptime TrapFrame.field.x16.offset;
+export asm("TF_X18") const trap_frame_asm_x18: usize = comptime TrapFrame.field.x18.offset;
+export asm("TF_X20") const trap_frame_asm_x20: usize = comptime TrapFrame.field.x20.offset;
+export asm("TF_X22") const trap_frame_asm_x22: usize = comptime TrapFrame.field.x22.offset;
+export asm("TF_X24") const trap_frame_asm_x24: usize = comptime TrapFrame.field.x24.offset;
+export asm("TF_X26") const trap_frame_asm_x26: usize = comptime TrapFrame.field.x26.offset;
+export asm("TF_X28") const trap_frame_asm_x28: usize = comptime TrapFrame.field.x28.offset;
+export asm("TF_X30") const trap_frame_asm_x30: usize = comptime TrapFrame.field.x30.offset;
+export asm("TF_SP") const trap_frame_asm_sp: usize = comptime TrapFrame.field.sp.offset;
+export asm("TF_ELR_EL1") const trap_frame_asm_elr_el1: usize = comptime TrapFrame.field.elr_el1.offset;
+export asm("TF_SPSR_EL1") const trap_frame_asm_spsr_el1: usize = comptime TrapFrame.field.spsr_el1.offset;
+export asm("TF_ESR_EL1") const trap_frame_asm_esr_el1: usize = comptime TrapFrame.field.esr_el1.offset;
+export asm("TF_FAR_EL1") const trap_frame_asm_far_el1: usize = comptime TrapFrame.field.far_el1.offset;
+export asm("TF_SIZE") const trap_frame_asm_size: usize = comptime TrapFrame.size;
+
 pub fn diagnostic(esr_el1: c_ulong, elr_el1: c_ulong, far_el1: c_ulong, spsr_el1: c_ulong): ExceptionDiagnosticFrame {
     return ExceptionDiagnosticFrame {
         esr_el1: esr_el1 as usize,
@@ -78,4 +127,77 @@ pub fn diagnostic_from_frame(frame: *TrapFrame): ExceptionDiagnosticFrame {
             spsr_el1: (*frame).spsr_el1 as usize,
         };
     }
+}
+
+pub fn verify_layout(): bool {
+    if trap_frame_size != 288 {
+        return false;
+    }
+    if trap_frame_align != 8 {
+        return false;
+    }
+    if trap_frame_x0_offset != 0 {
+        return false;
+    }
+    if trap_frame_x2_offset != 16 {
+        return false;
+    }
+    if trap_frame_x4_offset != 32 {
+        return false;
+    }
+    if trap_frame_x6_offset != 48 {
+        return false;
+    }
+    if trap_frame_x8_offset != 64 {
+        return false;
+    }
+    if trap_frame_x10_offset != 80 {
+        return false;
+    }
+    if trap_frame_x12_offset != 96 {
+        return false;
+    }
+    if trap_frame_x14_offset != 112 {
+        return false;
+    }
+    if trap_frame_x16_offset != 128 {
+        return false;
+    }
+    if trap_frame_x18_offset != 144 {
+        return false;
+    }
+    if trap_frame_x20_offset != 160 {
+        return false;
+    }
+    if trap_frame_x22_offset != 176 {
+        return false;
+    }
+    if trap_frame_x24_offset != 192 {
+        return false;
+    }
+    if trap_frame_x26_offset != 208 {
+        return false;
+    }
+    if trap_frame_x28_offset != 224 {
+        return false;
+    }
+    if trap_frame_x30_offset != 240 {
+        return false;
+    }
+    if trap_frame_sp_offset != 248 {
+        return false;
+    }
+    if trap_frame_elr_el1_offset != 256 {
+        return false;
+    }
+    if trap_frame_spsr_el1_offset != 264 {
+        return false;
+    }
+    if trap_frame_esr_el1_offset != 272 {
+        return false;
+    }
+    if trap_frame_far_el1_offset != 280 {
+        return false;
+    }
+    return true;
 }

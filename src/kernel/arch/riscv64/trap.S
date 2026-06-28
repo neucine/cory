@@ -3,46 +3,9 @@
 .global cycor_arch_trap_vector
 .type cycor_arch_trap_vector, @function
 
-.equ TF_RA, 0
-.equ TF_SP, 8
-.equ TF_GP, 16
-.equ TF_TP, 24
-.equ TF_T0, 32
-.equ TF_T1, 40
-.equ TF_T2, 48
-.equ TF_S0, 56
-.equ TF_S1, 64
-.equ TF_A0, 72
-.equ TF_A1, 80
-.equ TF_A2, 88
-.equ TF_A3, 96
-.equ TF_A4, 104
-.equ TF_A5, 112
-.equ TF_A6, 120
-.equ TF_A7, 128
-.equ TF_S2, 136
-.equ TF_S3, 144
-.equ TF_S4, 152
-.equ TF_S5, 160
-.equ TF_S6, 168
-.equ TF_S7, 176
-.equ TF_S8, 184
-.equ TF_S9, 192
-.equ TF_S10, 200
-.equ TF_S11, 208
-.equ TF_T3, 216
-.equ TF_T4, 224
-.equ TF_T5, 232
-.equ TF_T6, 240
-.equ TF_SEPC, 248
-.equ TF_SSTATUS, 256
-.equ TF_SCAUSE, 264
-.equ TF_STVAL, 272
-.equ TF_SIZE, 288
-
 cycor_arch_trap_vector:
-    # TrapFrame layout mirrors arch/riscv64/trap_frame.cy. These offsets are
-    # an ABI between this assembly save path and the Cyna cstruct.
+    # TF_* constants are generated from arch/riscv64/trap_frame.cy via
+    # `export asm const`, so the Cyna cstruct owns the frame layout.
     addi sp, sp, -TF_SIZE
     sd ra, TF_RA(sp)
     sd gp, TF_GP(sp)

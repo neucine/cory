@@ -3,29 +3,6 @@
 .global cycor_arch_exception_vectors
 .type cycor_arch_exception_vectors, %function
 
-.equ TF_X0, 0
-.equ TF_X2, 16
-.equ TF_X4, 32
-.equ TF_X6, 48
-.equ TF_X8, 64
-.equ TF_X10, 80
-.equ TF_X12, 96
-.equ TF_X14, 112
-.equ TF_X16, 128
-.equ TF_X18, 144
-.equ TF_X20, 160
-.equ TF_X22, 176
-.equ TF_X24, 192
-.equ TF_X26, 208
-.equ TF_X28, 224
-.equ TF_X30, 240
-.equ TF_SP, 248
-.equ TF_ELR_EL1, 256
-.equ TF_SPSR_EL1, 264
-.equ TF_ESR_EL1, 272
-.equ TF_FAR_EL1, 280
-.equ TF_SIZE, 288
-
 .macro vector_slot
     b cycor_arch_exception_vector_entry
     .balign 128
@@ -51,8 +28,8 @@ cycor_arch_exception_vectors:
 
 .type cycor_arch_exception_vector_entry, %function
 cycor_arch_exception_vector_entry:
-    // TrapFrame layout mirrors arch/aarch64/trap_frame.cy. These offsets are
-    // an ABI between this assembly save path and the Cyna cstruct.
+    // TF_* constants are generated from arch/aarch64/trap_frame.cy via
+    // `export asm const`, so the Cyna cstruct owns the frame layout.
     sub sp, sp, #TF_SIZE
     stp x0, x1, [sp, #TF_X0]
     stp x2, x3, [sp, #TF_X2]

@@ -1,7 +1,5 @@
-extern c {
-    const __bss_start: *u8 = "__bss_start";
-    const __bss_end: *u8 = "__bss_end";
-}
+extern c("__bss_start") const __bss_start: *u8;
+extern c("__bss_end") const __bss_end: *u8;
 
 fn zero_region(start: *u8, end: *u8): void {
     unchecked {

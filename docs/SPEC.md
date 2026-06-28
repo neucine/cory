@@ -202,6 +202,9 @@ Rules:
   instances, timers, device tree or board descriptors, and boot-device quirks.
 - Common kernel code must depend on architecture/platform traits or small Cyna
   modules, not on concrete QEMU constants.
+- Platform memory layout must include both RAM and boot-critical MMIO ranges.
+  Current QEMU platforms publish the UART MMIO page so VM activation can keep
+  panic and boot logging reachable after identity translation is enabled.
 - `extern c` declarations are a C ABI boundary, not an ordinary Cyna boundary.
   Use C ABI carrier types such as `c_ulong`, `c_size_t`, pointers, and
   C-layout structs in the declaration, then convert to kernel-native types such
@@ -220,6 +223,40 @@ Portability is a first-class requirement because Cycor has two tracks:
 Both QEMU targets should keep boot checks working. Platform parity bugs are
 valuable because they reveal hidden assumptions in Cyna, the linker, runtime
 builtins, or Cycor's architecture split.
+
+## Privilege-State Model
+
+Cycor has one privileged kernel contract per architecture:
+
+| Architecture | Kernel contract | Current entry path |
+|---|---|---|
+| AArch64 | EL1 | QEMU may enter at EL1 or EL2; `arch/aarch64/start.S` normalizes EL2 to EL1 before calling Cyna |
+| RISC-V64 | S-mode | QEMU `virt -bios none` enters in M-mode; `arch/riscv64/start.S` uses M-mode only for PMP/delegation setup, then `mret`s to S-mode before calling Cyna |
+
+Common Cyna kernel code starts after this normalization. It should not branch on
+raw architecture privilege state. Architecture code owns the transition into the
+kernel contract and must leave behind small, documented entry labels:
+
+- AArch64: `cycor_aarch64_el1_entry` is the first normalized EL1 entry point.
+- RISC-V64: `cycor_riscv64_s_entry` is the first S-mode kernel entry point.
+
+The current RISC-V path intentionally assumes a machine-mode firmware contract
+equivalent to QEMU `-bios none`: Cycor owns the M-mode setup long enough to open
+PMP and delegate basic traps. A future firmware/SBI boot path should be a
+separate platform entry path, not an implicit change to common RISC-V code.
+
+Current privilege-mode scope:
+
+- AArch64 configures EL2 enough to enter EL1 with a stack and direct exception
+  vector setup.
+- RISC-V64 configures one permissive PMP range, delegates the currently needed
+  synchronous exceptions and supervisor interrupts, and enters S-mode.
+- Timer ownership, interrupt-controller setup, SBI integration, user-mode
+  entry, and trap return are not implemented yet.
+
+This model matters for portability: if a platform starts at a different
+privilege level, the platform or architecture entry code must adapt before Cyna
+common kernel code runs.
 
 ## Trap-State Model
 
@@ -260,13 +297,20 @@ Current implementation status:
 
 Cyna pressure point:
 
-- Cycor needs compile-time `sizeof`, `alignof`, and `offsetof`-style layout
-  introspection for C-layout structs.
-- Without it, the trap-frame ABI between assembly `TF_*` constants and Cyna
-  `cstruct` fields can be documented and tested through QEMU trap probes, but
-  cannot be mechanically asserted inside Cyna.
-- Do not silently work around this with another duplicate source of truth unless
-  the tradeoff is explicitly documented.
+- Cycor uses Cyna's `comptime` C ABI metadata operator to publish
+  `TrapFrame.size`, `TrapFrame.align`, and `TrapFrame.field.name.offset`
+  constants from each architecture trap-frame module.
+- Cycor uses Cyna's `export asm const` declarations in those same modules to
+  emit the `TF_*` constants consumed by architecture assembly. This makes the
+  Cyna `cstruct` the source of truth for trap-frame offsets.
+- Each architecture `trap_frame.cy` module has a boot-time `verify_layout`
+  guard. This catches drift in the Cyna `cstruct` field layout before exception
+  vectors are installed.
+- RISC-V64 reserves 288 bytes in assembly for trap-stack alignment, while the
+  C ABI `TrapFrame` payload is 280 bytes. The final 8 bytes are stack padding,
+  not Cyna-visible struct storage.
+- Remaining Cyna gap: static assertions are not available yet, so Cycor still
+  keeps a boot-time `verify_layout` guard for human-readable diagnostics.
 
 Normal boot must never depend on deliberately taking a trap. Diagnostic trap
 coverage lives in opt-in QEMU manifests:
@@ -434,12 +478,146 @@ Decision:
 - VM owns mappings, not physical frame availability and not fine-grained heap
   policy.
 - Address spaces are kernel objects and should arrive before userspace.
+- module: `kernel.memory.vm`
+- page-table geometry module: `kernel.memory.page_table`
+- architecture providers: `kernel.arch.aarch64.page_table`,
+  `kernel.arch.riscv64.page_table`
+- platform activation bridges: `kernel.platform.*.vm_activation`
+- address labels: `PhysAddr` and `VirtAddr`
+- current implementation: naming, rights, bootstrap mapping requests, and
+  architecture page-table geometry, leaf-entry encoding contracts, bootstrap
+  page-table storage allocation, platform UART MMIO identity mapping, and
+  platform-owned identity-map activation
+
+`PhysAddr` and `VirtAddr` are semantic labels over `usize` for now. They make
+mapping code readable, but Cyna does not yet enforce them as distinct machine
+types. Code that crosses the VM boundary should still use conversion helpers
+such as `identity_virtual_for_phys` instead of casual casts.
+
+Page-table geometry is a common contract, but descriptor encodings and control
+registers stay architecture-local. Common VM code may depend on:
+
+- page size
+- page offset bits
+- table level count
+- index bits per level
+- entries per table
+- entry size
+- supported virtual and physical address bits
+
+The current providers are:
+
+- AArch64 EL1, 4 KiB granule, 4 levels, 48-bit virtual addresses, 40-bit
+  physical addresses for the QEMU `cortex-a53` platform model
+- RISC-V64 Sv39, 4 KiB pages, 3 levels, 39-bit virtual addresses
+
+Architecture modules also expose leaf-entry encoders for bootstrap mappings.
+These encoders translate common VM rights into architecture descriptor bits and
+round-trip the physical page address for selftests:
+
+- AArch64 encodes 4 KiB EL1 level-3 page descriptors.
+- RISC-V64 encodes Sv39 leaf PTEs.
+
+VM allocates a contiguous physical range for bootstrap page-table storage from
+`phys`. The range is registered back into the canonical memory map as
+`bootstrap_page_tables`, then VM mapping requests are rebuilt so the page-table
+storage itself is identity-mapped. The current allocation is a deterministic
+upper bound: it does not share intermediate tables between mapping requests
+yet. That trades memory efficiency for a simple ownership contract while real
+multi-level population is still under construction.
+
+VM also zeros the reserved table pages and exposes bounded raw entry
+read/write helpers for bootstrap population. Architecture modules encode
+non-leaf table descriptors:
+
+- AArch64 encodes next-table descriptors.
+- RISC-V64 encodes valid non-leaf PTEs with R/W/X clear.
+
+Architecture modules now populate the zeroed bootstrap table storage from the
+VM mapping requests. VM owns the portable walk primitives:
+
+- calculate the table index for each virtual-address level
+- allocate child table pages from the reserved table range
+- read and write raw entries inside bounded table pages
+
+Architecture modules own descriptor encoding and lookup:
+
+- write non-leaf descriptors when a child table is allocated
+- write leaf descriptors for each page in every bootstrap mapping request
+- encode platform device MMIO with architecture-appropriate memory attributes
+  where the page-table format carries them
+- walk the populated tables in selftests to verify representative identity
+  translations
+
+This is full bootstrap table population for the current identity-map requests.
+
+Architecture modules publish the register values required by activation:
+
+- AArch64: `TTBR0_EL1` root address, `MAIR_EL1` normal/device attributes,
+  `TCR_EL1` 4 KiB 48-bit VA / 40-bit PA translation settings, and
+  `SCTLR_EL1` enable bits.
+- RISC-V64: `satp` value for Sv39 with the root page-table physical page
+  number.
+
+Platform modules own the final activation bridge because the assembly shim
+symbol is target-local. Shared page-table modules must stay pure enough to be
+imported by cross-architecture selftests without forcing the other
+architecture's assembly symbol into the current link. The platform activation
+bridge writes exactly the architecture-published values, runs the
+architecture-required barriers/fences, and then keeps executing through the
+already-populated identity map.
+
+AArch64 bootstrap leaves default to EL1-only access. The descriptor bit that
+allows EL0 access must only be set for future user mappings; setting it on
+kernel/MMIO leaves can combine with `SCTLR_EL1.PAN` and fault EL1 data access
+after translation is enabled. The activation shim also clears `SCTLR_EL1.WXN`
+while the temporary `kernel_image` mapping is RWX. WXN should be restored when
+section-level W^X mappings exist.
+
+VM bootstrap mapping requests are generated from the canonical memory map:
+
+- one request per non-`free_ram` region
+- virtual address equals physical address
+- start and end must be page-aligned
+- platform UART MMIO is represented as `device_mmio`
+- kernel image temporarily maps read/write/execute
+- boot allocator, physical page bitmap, pre-VM heap, MMIO, and stack map
+  read/write
+- bootstrap page-table storage maps read/write
+- no bootstrap mapping request may set user access
+
+These requests are now consumed by architecture page-table population code.
+They remain the source-of-truth policy data for the bootstrap identity map.
+
+The current `kernel_image` memory-map range covers text, rodata, data, bss, and
+the bootstrap stack because the linker does not yet publish section-level
+boundaries. It is therefore temporarily mapped RWX. This is a deliberate
+bootstrap compromise, not the intended final W^X policy; once section-level
+regions exist, text should become RX and mutable data/stack should remain RW.
+
+The bootstrap VM plan is intentionally conservative:
+
+- identity-map every memory-map region where `needs_identity_mapping(kind)` is
+  true
+- keep the kernel image, boot allocator range, physical page bitmap, pre-VM
+  heap, MMIO, and stack reachable by their current addresses
+- reserve a named high-half kernel heap virtual range for later heap migration
+- keep physical frame ownership in `phys`; VM consumes frames but does not own
+  the free/used policy
+- the initial named kernel virtual range starts at `0xffff800000000000`
 
 Near-term VM goals:
 
-- define physical-address and virtual-address naming conventions
-- identity-map the kernel image and all non-`free_ram` memory-map regions
-- establish a kernel virtual range for future heap migration
+- define physical-address and virtual-address naming conventions: done
+- identity-map the kernel image and all non-`free_ram` memory-map regions:
+  encoded and activated for the bootstrap map
+- establish a kernel virtual range for future heap migration: named, not mapped
+- define page-table geometry per architecture: done
+- encode architecture leaf entries for bootstrap mapping rights: done
+- allocate bootstrap page-table storage from physical memory: done
+- zero page-table storage and verify non-leaf descriptor encoding: done
+- populate bootstrap identity page tables from VM mapping requests: done
+- activate bootstrap identity mappings on both QEMU targets: done
 - add page map/unmap operations with explicit rights
 - prepare user/kernel address separation
 
@@ -844,14 +1022,21 @@ Done:
 - physical page allocator
 - pre-VM heap
 - memory map with sorted owned regions
+- VM address labels, rights bits, bootstrap plan, and identity mapping requests
+- page-table geometry contract for AArch64 and RISC-V64
+- page-table leaf-entry encoding contract for AArch64 and RISC-V64
+- bootstrap page-table storage allocation and memory-map ownership
+- page-table zeroing and non-leaf descriptor contract
+- bootstrap identity page-table population and lookup selftests
+- platform UART MMIO identity mapping contract
+- architecture MMU activation register-value contract
 - heap diagnostics
 - AArch64/RISC-V boot checks
 
 Next:
 
-- physical-address and virtual-address naming conventions
-- page-table abstractions per architecture
-- kernel identity mapping from memory map
+- kernel identity mapping activation from memory map
+- architecture MMU register write shims and barriers
 - kernel virtual heap range
 - transition heap from pre-VM physical identity mapping to VM-backed virtual
   mapping

@@ -1,8 +1,6 @@
 import std.io;
 
-extern c {
-    fn platform_putc(ch: c_uchar): void = "cycor_console_putc";
-}
+extern c("cycor_console_putc") fn platform_putc(ch: c_uchar): void;
 
 pub fn init(): void {
     io.install_writer(write, none);

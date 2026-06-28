@@ -10,6 +10,7 @@ pub const kind_physical_page_bitmap: i32 = 3;
 pub const kind_pre_vm_heap: i32 = 4;
 pub const kind_device_mmio: i32 = 5;
 pub const kind_kernel_stack: i32 = 6;
+pub const kind_bootstrap_page_tables: i32 = 7;
 
 pub struct Region {
     pub start: usize;
@@ -24,7 +25,7 @@ pub struct MemoryMapSnapshot {
 }
 
 pub const max_regions: usize = 16;
-const max_owned_regions: usize = 8;
+const max_owned_regions: usize = 10;
 
 // The early map is a small fixed table so kernel boot has deterministic
 // storage and does not depend on heap allocation. The parallel arrays keep the
@@ -34,10 +35,13 @@ var region_ends: [16]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 var region_kinds: [16]i32 = [kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram];
 var used_regions: usize = 0;
 
-var owned_starts: [8]usize = [0, 0, 0, 0, 0, 0, 0, 0];
-var owned_ends: [8]usize = [0, 0, 0, 0, 0, 0, 0, 0];
-var owned_kinds: [8]i32 = [kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram];
+var owned_starts: [10]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+var owned_ends: [10]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+var owned_kinds: [10]i32 = [kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram];
 var used_owned_regions: usize = 0;
+
+var bootstrap_page_table_start: usize = 0;
+var bootstrap_page_table_end: usize = 0;
 
 fn empty_region(): Region {
     return Region {
@@ -132,6 +136,15 @@ pub fn rebuild(layout: Layout): bool {
     const heap_used = heap.snapshot();
     const bitmap_end = boot.align_up(phys_used.bitmap_start + phys_used.bitmap_bytes, layout.page_size);
 
+    // Platform MMIO is not RAM and is not owned by `phys`, but it must enter the
+    // canonical map before VM activation so identity mappings keep devices like
+    // the boot UART reachable.
+    if layout.device_mmio_end > layout.device_mmio_start {
+        if !add_region(layout.device_mmio_start, layout.device_mmio_end, kind_device_mmio) {
+            return false;
+        }
+    }
+
     // Owned ranges can be discovered in subsystem order, not address order.
     // Build a sorted owned list first, then fill every gap as `free_ram`.
     if !add_owned_region(layout.kernel_load, boot_used.start, kind_kernel_image) {
@@ -148,8 +161,18 @@ pub fn rebuild(layout: Layout): bool {
             return false;
         }
     }
+    if bootstrap_page_table_end > bootstrap_page_table_start {
+        if !add_owned_region(bootstrap_page_table_start, bootstrap_page_table_end, kind_bootstrap_page_tables) {
+            return false;
+        }
+    }
 
     return build_regions_from_owned(layout);
+}
+
+pub fn set_bootstrap_page_tables(start: usize, end: usize): void {
+    bootstrap_page_table_start = start;
+    bootstrap_page_table_end = end;
 }
 
 pub fn count(): usize {

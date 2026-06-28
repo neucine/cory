@@ -3,15 +3,17 @@ import { TrapFrame } from .kernel.arch.aarch64.trap_frame;
 import .kernel.console;
 import .kernel.panic as panic_mod;
 
-extern c {
-    fn cycor_arch_exception_init(): void = "cycor_arch_exception_init";
-    fn cycor_arch_abi_probe_value(): c_ulong = "cycor_arch_abi_probe_value";
-    fn cycor_arch_current_el(): c_ulong = "cycor_arch_current_el";
-}
+extern c("cycor_arch_exception_init") fn cycor_arch_exception_init(): void;
+extern c("cycor_arch_abi_probe_value") fn cycor_arch_abi_probe_value(): c_ulong;
+extern c("cycor_arch_current_el") fn cycor_arch_current_el(): c_ulong;
 
 pub fn init(): void {
     if cycor_arch_current_el() != 1 {
         println("exception: expected EL1");
+        panic_mod.panic();
+    }
+    if !trap_frame.verify_layout() {
+        println("exception: trap frame layout mismatch");
         panic_mod.panic();
     }
     cycor_arch_exception_init();
@@ -22,7 +24,7 @@ pub fn init(): void {
     println("exception: vectors ready");
 }
 
-export c fn cycor_arch_exception_entry(raw_frame: *TrapFrame): void = "cycor_arch_exception_entry" {
+export c("cycor_arch_exception_entry") fn cycor_arch_exception_entry(raw_frame: *TrapFrame): void {
     const frame = trap_frame.diagnostic_from_frame(raw_frame);
     println("exception: unhandled aarch64");
     println("exception: esr_el1");

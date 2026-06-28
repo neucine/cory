@@ -123,6 +123,32 @@ fn mark_range(start: usize, end: usize, used: bool): void {
     }
 }
 
+fn range_is_free(start_index: usize, count: usize): bool {
+    if count == 0 {
+        return false;
+    }
+    if start_index + count > page_count {
+        return false;
+    }
+
+    var index: usize = 0;
+    while index < count {
+        if is_used(start_index + index) {
+            return false;
+        }
+        index = index + 1;
+    }
+    return true;
+}
+
+fn set_range_used(start_index: usize, count: usize): void {
+    var index: usize = 0;
+    while index < count {
+        set_used(start_index + index, true);
+        index = index + 1;
+    }
+}
+
 pub fn init(map: Layout): bool {
     ram_start = map.ram_start;
     ram_end = map.ram_end;
@@ -153,6 +179,22 @@ pub fn alloc_page(): usize {
     while index < page_count {
         if !is_used(index) {
             set_used(index, true);
+            return page_addr(index);
+        }
+        index = index + 1;
+    }
+    return 0;
+}
+
+pub fn alloc_contiguous_pages(count: usize): usize {
+    if count == 0 {
+        return 0;
+    }
+
+    var index: usize = 0;
+    while index < page_count {
+        if range_is_free(index, count) {
+            set_range_used(index, count);
             return page_addr(index);
         }
         index = index + 1;
