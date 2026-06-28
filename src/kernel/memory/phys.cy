@@ -18,15 +18,27 @@ var free_count: usize = 0;
 var bitmap_addr: usize = 0;
 var bitmap_len: usize = 0;
 
+const max_usize: usize = 0 - 1;
+
+fn is_power_of_two(value: usize): bool {
+    if value == 0 {
+        return false;
+    }
+    return (value & (value - 1)) == 0;
+}
+
 fn align_down(value: usize, alignment: usize): usize {
-    if alignment == 0 {
-        return value;
+    if !is_power_of_two(alignment) {
+        return 0;
     }
     return value & (0 - alignment);
 }
 
 fn div_round_up(value: usize, divisor: usize): usize {
     if divisor == 0 {
+        return 0;
+    }
+    if value > max_usize - (divisor - 1) {
         return 0;
     }
     return (value + divisor - 1) / divisor;
@@ -127,6 +139,9 @@ fn range_is_free(start_index: usize, count: usize): bool {
     if count == 0 {
         return false;
     }
+    if start_index > max_usize - count {
+        return false;
+    }
     if start_index + count > page_count {
         return false;
     }
@@ -150,6 +165,12 @@ fn set_range_used(start_index: usize, count: usize): void {
 }
 
 pub fn init(map: Layout): bool {
+    if map.ram_end <= map.ram_start {
+        return false;
+    }
+    if !is_power_of_two(map.page_size) {
+        return false;
+    }
     ram_start = map.ram_start;
     ram_end = map.ram_end;
     page_size = map.page_size;

@@ -1,4 +1,5 @@
 import { Layout } from .kernel.memory.layout;
+import .kernel.memory.heap;
 import .kernel.memory.map as memory_map;
 import { Spec } from .kernel.memory.page_table;
 import .kernel.memory.phys;
@@ -15,12 +16,10 @@ pub const rights_write: u8 = 2;
 pub const rights_execute: u8 = 4;
 pub const rights_user: u8 = 8;
 
-// This high-half range is a named reservation contract until page tables exist.
-// Boot still runs with identity mappings; no page table consumes this yet.
-pub const kernel_virtual_base: VirtAddr = 0xffff800000000000;
-pub const kernel_heap_virtual_base: VirtAddr = 0xffff800040000000;
+// These offsets name the kernel heap inside the architecture's upper canonical
+// virtual range. The concrete base depends on the active page-table geometry.
+pub const kernel_heap_virtual_offset: usize = 0x40000000;
 pub const kernel_heap_virtual_size: usize = 0x04000000;
-pub const kernel_heap_virtual_end: VirtAddr = kernel_heap_virtual_base + kernel_heap_virtual_size;
 
 pub struct MappingRequest {
     pub virt_start: VirtAddr;
@@ -33,21 +32,28 @@ pub struct MappingRequest {
 pub struct VmBootstrapPlan {
     pub identity_region_count: usize;
     pub mapping_request_count: usize;
+    pub kernel_heap_mapping_count: usize;
     pub page_table_root: PhysAddr;
     pub page_table_pages: usize;
     pub page_table_used_pages: usize;
     pub page_table_zeroed_pages: usize;
     pub kernel_heap_base: VirtAddr;
     pub kernel_heap_end: VirtAddr;
+    pub user_base: VirtAddr;
+    pub user_end: VirtAddr;
+    pub kernel_base: VirtAddr;
     pub page_size: usize;
 }
 
-var mapping_virt_starts: [16]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-var mapping_phys_starts: [16]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-var mapping_sizes: [16]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-var mapping_rights: [16]u8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-var mapping_kinds: [16]i32 = [memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram];
+pub const max_mapping_requests: usize = 20;
+
+var mapping_virt_starts: [20]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+var mapping_phys_starts: [20]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+var mapping_sizes: [20]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+var mapping_rights: [20]u8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+var mapping_kinds: [20]i32 = [memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram];
 var used_mapping_requests: usize = 0;
+var kernel_heap_mapping_count: usize = 0;
 
 var bootstrap_page_table_root: PhysAddr = 0;
 var bootstrap_page_table_pages: usize = 0;
@@ -75,8 +81,12 @@ fn div_round_up(value: usize, divisor: usize): usize {
     return (value + divisor - 1) / divisor;
 }
 
+fn entry_addr_for_geometry(page_index: usize, entry_index: usize, page_size: usize, entry_size: usize): usize {
+    return bootstrap_page_table_root + (page_index * page_size) + (entry_index * entry_size);
+}
+
 fn entry_addr(page_index: usize, entry_index: usize, spec: Spec): usize {
-    return bootstrap_page_table_root + (page_index * spec.page_size) + (entry_index * spec.entry_size);
+    return entry_addr_for_geometry(page_index, entry_index, spec.page_size, spec.entry_size);
 }
 
 fn write_entry(page_index: usize, entry_index: usize, spec: Spec, raw: usize): void {
@@ -107,6 +117,39 @@ pub fn identity_virtual_for_phys(addr: PhysAddr): VirtAddr {
 
 pub fn phys_for_identity_virtual(addr: VirtAddr): PhysAddr {
     return addr;
+}
+
+pub fn kernel_virtual_base_for_spec(spec: Spec): VirtAddr {
+    if spec.virtual_address_bits == 0 {
+        return 0;
+    }
+    if spec.virtual_address_bits >= (8 * 8) {
+        return 0;
+    }
+    const upper_half_size = 1 << (spec.virtual_address_bits - 1);
+    return 0 - upper_half_size;
+}
+
+pub fn user_virtual_base_for_spec(spec: Spec): VirtAddr {
+    return 0;
+}
+
+pub fn user_virtual_end_for_spec(spec: Spec): VirtAddr {
+    if spec.virtual_address_bits == 0 {
+        return 0;
+    }
+    if spec.virtual_address_bits >= (8 * 8) {
+        return 0;
+    }
+    return 1 << (spec.virtual_address_bits - 1);
+}
+
+pub fn kernel_heap_virtual_base_for_spec(spec: Spec): VirtAddr {
+    return kernel_virtual_base_for_spec(spec) + kernel_heap_virtual_offset;
+}
+
+pub fn kernel_heap_virtual_end_for_spec(spec: Spec): VirtAddr {
+    return kernel_heap_virtual_base_for_spec(spec) + kernel_heap_virtual_size;
 }
 
 pub fn rights_kernel_rw(): u8 {
@@ -142,6 +185,94 @@ pub fn rights_has_user(rights: u8): bool {
     return (rights & rights_user) != 0;
 }
 
+pub fn rights_are_kernel(rights: u8): bool {
+    return !rights_has_user(rights);
+}
+
+pub fn rights_are_valid(rights: u8): bool {
+    const known = rights_read | rights_write | rights_execute | rights_user;
+    if (rights | known) != known {
+        return false;
+    }
+    if (rights & (rights_read | rights_write | rights_execute)) == 0 {
+        return false;
+    }
+    if (rights & rights_write) != 0 {
+        return (rights & rights_read) != 0;
+    }
+    return true;
+}
+
+pub fn validate_page_mapping(virt: VirtAddr, phys: PhysAddr, rights: u8, spec: Spec): bool {
+    return validate_page_mapping_for_size(virt, phys, rights, spec.page_size);
+}
+
+pub fn validate_page_mapping_for_size(virt: VirtAddr, phys: PhysAddr, rights: u8, page_size: usize): bool {
+    if !rights_are_valid(rights) {
+        return false;
+    }
+    if !is_page_aligned(virt, page_size) {
+        return false;
+    }
+    if !is_page_aligned(phys, page_size) {
+        return false;
+    }
+    return true;
+}
+
+pub fn range_fits(virt: VirtAddr, size: usize): bool {
+    if size == 0 {
+        return false;
+    }
+    if virt > (0 - 1) - size {
+        return false;
+    }
+    return true;
+}
+
+pub fn is_user_virtual_range(virt: VirtAddr, size: usize, spec: Spec): bool {
+    if !range_fits(virt, size) {
+        return false;
+    }
+    const end = virt + size;
+    if virt < user_virtual_base_for_spec(spec) {
+        return false;
+    }
+    return end <= user_virtual_end_for_spec(spec);
+}
+
+pub fn is_kernel_virtual_range(virt: VirtAddr, size: usize, spec: Spec): bool {
+    if !range_fits(virt, size) {
+        return false;
+    }
+    const end = virt + size;
+    const kernel_base = kernel_virtual_base_for_spec(spec);
+    if virt < kernel_base {
+        return false;
+    }
+    return end > virt;
+}
+
+pub fn validate_user_page_mapping(virt: VirtAddr, phys: PhysAddr, rights: u8, spec: Spec): bool {
+    if !validate_page_mapping(virt, phys, rights, spec) {
+        return false;
+    }
+    if !rights_has_user(rights) {
+        return false;
+    }
+    return is_user_virtual_range(virt, spec.page_size, spec);
+}
+
+pub fn validate_kernel_page_mapping(virt: VirtAddr, phys: PhysAddr, rights: u8, spec: Spec): bool {
+    if !validate_page_mapping(virt, phys, rights, spec) {
+        return false;
+    }
+    if rights_has_user(rights) {
+        return false;
+    }
+    return is_kernel_virtual_range(virt, spec.page_size, spec);
+}
+
 fn empty_mapping_request(): MappingRequest {
     return MappingRequest {
         virt_start: 0,
@@ -154,14 +285,33 @@ fn empty_mapping_request(): MappingRequest {
 
 fn reset_mapping_requests(): void {
     used_mapping_requests = 0;
+    kernel_heap_mapping_count = 0;
 }
 
-fn write_mapping_request(index: usize, region: memory_map.Region): void {
-    mapping_virt_starts[index] = identity_virtual_for_phys(region.start);
-    mapping_phys_starts[index] = region.start;
-    mapping_sizes[index] = region.end - region.start;
-    mapping_rights[index] = rights_for_memory_kind(region.kind);
-    mapping_kinds[index] = region.kind;
+fn write_mapping_request(index: usize, virt_start: VirtAddr, phys_start: PhysAddr, size: usize, rights: u8, kind: i32): void {
+    mapping_virt_starts[index] = virt_start;
+    mapping_phys_starts[index] = phys_start;
+    mapping_sizes[index] = size;
+    mapping_rights[index] = rights;
+    mapping_kinds[index] = kind;
+}
+
+fn append_mapping_request(virt_start: VirtAddr, phys_start: PhysAddr, size: usize, rights: u8, kind: i32, spec: Spec): bool {
+    if used_mapping_requests >= max_mapping_requests {
+        return false;
+    }
+    if size == 0 {
+        return false;
+    }
+    if !is_page_aligned(size, spec.page_size) {
+        return false;
+    }
+    if !validate_page_mapping(virt_start, phys_start, rights, spec) {
+        return false;
+    }
+    write_mapping_request(used_mapping_requests, virt_start, phys_start, size, rights, kind);
+    used_mapping_requests = used_mapping_requests + 1;
+    return true;
 }
 
 fn table_pages_for_page_count(mapped_pages: usize, spec: Spec): usize {
@@ -198,29 +348,40 @@ fn estimate_bootstrap_page_table_pages(layout: Layout, spec: Spec, extra_mapping
     return total;
 }
 
-// Build a deterministic list of identity mapping requests from the canonical
-// memory map. Architecture code consumes this policy list to encode hardware
-// descriptors; VM remains the source of portable rights and identity ranges.
-pub fn rebuild_bootstrap_mappings(layout: Layout): bool {
+// Build deterministic mapping requests from the canonical memory map plus the
+// high-half alias for committed heap pages. Identity requests keep boot-owned
+// storage reachable after activation; the heap alias is the first non-identity
+// kernel mapping.
+pub fn rebuild_bootstrap_mappings(layout: Layout, spec: Spec): bool {
     reset_mapping_requests();
 
     var index: usize = 0;
     while index < memory_map.count() {
         const region = memory_map.get(index);
         if memory_map.needs_identity_mapping(region.kind) {
-            if used_mapping_requests >= memory_map.max_regions {
-                return false;
-            }
             if !is_page_aligned(region.start, layout.page_size) {
                 return false;
             }
             if !is_page_aligned(region.end, layout.page_size) {
                 return false;
             }
-            write_mapping_request(used_mapping_requests, region);
-            used_mapping_requests = used_mapping_requests + 1;
+            if !append_mapping_request(identity_virtual_for_phys(region.start), region.start, region.end - region.start, rights_for_memory_kind(region.kind), region.kind, spec) {
+                return false;
+            }
         }
         index = index + 1;
+    }
+
+    const heap_used = heap.snapshot();
+    if heap_used.committed_pages != 0 {
+        const heap_size = heap_used.committed_pages * layout.page_size;
+        if heap_size > kernel_heap_virtual_size {
+            return false;
+        }
+        if !append_mapping_request(kernel_heap_virtual_base_for_spec(spec), heap_used.start, heap_size, rights_kernel_rw(), memory_map.kind_kernel_heap_virtual, spec) {
+            return false;
+        }
+        kernel_heap_mapping_count = 1;
     }
 
     return true;
@@ -300,32 +461,50 @@ pub fn bootstrap_table_page_count(): usize {
 }
 
 pub fn page_table_level_index(virt: VirtAddr, spec: Spec, level: usize): usize {
-    if level >= spec.level_count {
+    return page_table_level_index_for_geometry(virt, spec.page_offset_bits, spec.level_count, spec.level_index_bits, spec.entries_per_table, level);
+}
+
+pub fn page_table_level_index_for_geometry(virt: VirtAddr, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, level: usize): usize {
+    if level >= level_count {
         return 0;
     }
-    const shift = spec.page_offset_bits + ((spec.level_count - 1 - level) * spec.level_index_bits);
-    return (virt >> shift) & (spec.entries_per_table - 1);
+    const shift = page_offset_bits + ((level_count - 1 - level) * level_index_bits);
+    return (virt >> shift) & (entries_per_table - 1);
 }
 
 pub fn write_bootstrap_table_entry(page_index: usize, entry_index: usize, spec: Spec, entry_raw: usize): bool {
+    return write_bootstrap_table_entry_for_geometry(page_index, entry_index, spec.page_size, spec.entries_per_table, spec.entry_size, entry_raw);
+}
+
+pub fn write_bootstrap_table_entry_for_geometry(page_index: usize, entry_index: usize, page_size: usize, entries_per_table: usize, entry_size: usize, entry_raw: usize): bool {
     if page_index >= bootstrap_page_table_pages {
         return false;
     }
-    if entry_index >= spec.entries_per_table {
+    if entry_index >= entries_per_table {
         return false;
     }
-    write_entry(page_index, entry_index, spec, entry_raw);
+    unchecked {
+        const ptr = entry_addr_for_geometry(page_index, entry_index, page_size, entry_size) as! *usize;
+        *ptr = entry_raw;
+    }
     return true;
 }
 
 pub fn read_bootstrap_table_entry(page_index: usize, entry_index: usize, spec: Spec): usize {
+    return read_bootstrap_table_entry_for_geometry(page_index, entry_index, spec.page_size, spec.entries_per_table, spec.entry_size);
+}
+
+pub fn read_bootstrap_table_entry_for_geometry(page_index: usize, entry_index: usize, page_size: usize, entries_per_table: usize, entry_size: usize): usize {
     if page_index >= bootstrap_page_table_pages {
         return 0;
     }
-    if entry_index >= spec.entries_per_table {
+    if entry_index >= entries_per_table {
         return 0;
     }
-    return read_entry(page_index, entry_index, spec);
+    unchecked {
+        const ptr = entry_addr_for_geometry(page_index, entry_index, page_size, entry_size) as! *usize;
+        return *ptr;
+    }
 }
 
 pub fn mapping_request_count(): usize {
@@ -345,30 +524,46 @@ pub fn mapping_request(index: usize): MappingRequest {
     };
 }
 
-pub fn validate_kernel_heap_range(): bool {
+pub fn validate_kernel_heap_range(spec: Spec): bool {
     if kernel_heap_virtual_size == 0 {
         return false;
     }
-    if kernel_heap_virtual_end <= kernel_heap_virtual_base {
+    const kernel_base = kernel_virtual_base_for_spec(spec);
+    if kernel_base == 0 {
         return false;
     }
-    if kernel_heap_virtual_base < kernel_virtual_base {
+    const heap_base = kernel_heap_virtual_base_for_spec(spec);
+    const heap_end = kernel_heap_virtual_end_for_spec(spec);
+    if heap_base < kernel_base {
+        return false;
+    }
+    if heap_end <= heap_base {
+        return false;
+    }
+    if heap_end < heap_base {
+        return false;
+    }
+    if heap_base - kernel_base > ((1 << (spec.virtual_address_bits - 1)) - kernel_heap_virtual_size) {
         return false;
     }
     return true;
 }
 
-pub fn bootstrap_plan(layout: Layout): VmBootstrapPlan {
+pub fn bootstrap_plan(layout: Layout, spec: Spec): VmBootstrapPlan {
     const snapshot = memory_map.snapshot();
     return VmBootstrapPlan {
         identity_region_count: snapshot.identity_region_count,
         mapping_request_count: used_mapping_requests,
+        kernel_heap_mapping_count: kernel_heap_mapping_count,
         page_table_root: bootstrap_page_table_root,
         page_table_pages: bootstrap_page_table_pages,
         page_table_used_pages: bootstrap_page_table_used_pages,
         page_table_zeroed_pages: bootstrap_page_table_zeroed_pages,
-        kernel_heap_base: kernel_heap_virtual_base,
-        kernel_heap_end: kernel_heap_virtual_end,
+        kernel_heap_base: kernel_heap_virtual_base_for_spec(spec),
+        kernel_heap_end: kernel_heap_virtual_end_for_spec(spec),
+        user_base: user_virtual_base_for_spec(spec),
+        user_end: user_virtual_end_for_spec(spec),
+        kernel_base: kernel_virtual_base_for_spec(spec),
         page_size: layout.page_size,
     };
 }

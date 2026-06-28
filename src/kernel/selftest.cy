@@ -1,5 +1,6 @@
 import .kernel.arch.aarch64.page_table as aarch64_page_table;
 import .kernel.arch.riscv64.page_table as riscv64_page_table;
+import .kernel.memory.address_space;
 import .kernel.memory.boot;
 import .kernel.memory.heap;
 import { Layout } from .kernel.memory.layout;
@@ -207,6 +208,69 @@ pub fn run_heap_tests(map: Layout): void {
     if after.free_pages + heap_used.committed_pages != before.free_pages {
         fail("selftest: heap phys page count");
     }
+    if heap_used.returns_virtual {
+        fail("selftest: heap early virtual mode");
+    }
+}
+
+pub fn run_heap_virtual_tests(page_size: usize, kernel_heap_virtual_base: usize): void {
+    if !heap.returns_virtual() {
+        fail("selftest: heap virtual mode");
+    }
+    const before = heap.snapshot();
+    if before.virtual_start != kernel_heap_virtual_base {
+        fail("selftest: heap virtual start");
+    }
+    if before.virtual_end != before.virtual_start + (before.committed_pages * page_size) {
+        fail("selftest: heap virtual end");
+    }
+    const allocated = heap.allocate(32, 16);
+    if allocated == 0 {
+        fail("selftest: heap virtual alloc");
+    }
+    if allocated < before.virtual_start {
+        fail("selftest: heap virtual alloc low");
+    }
+    if allocated >= before.virtual_end {
+        fail("selftest: heap virtual alloc high");
+    }
+    if (allocated & 15) != 0 {
+        fail("selftest: heap virtual alloc align");
+    }
+    const after = heap.snapshot();
+    if after.virtual_next != after.virtual_start + after.used_bytes {
+        fail("selftest: heap virtual next");
+    }
+    if after.requested_bytes != before.requested_bytes + 32 {
+        fail("selftest: heap virtual requested");
+    }
+
+    const growth_before = heap.snapshot();
+    const remaining = growth_before.virtual_end - growth_before.virtual_next;
+    const grown = heap.allocate(remaining + 32, 16);
+    if grown == 0 {
+        fail("selftest: heap virtual grow alloc");
+    }
+    const growth_after = heap.snapshot();
+    if growth_after.committed_pages != growth_before.committed_pages + 1 {
+        fail("selftest: heap virtual grow pages");
+    }
+    if growth_after.virtual_end != growth_before.virtual_end + page_size {
+        fail("selftest: heap virtual grow end");
+    }
+    if grown < growth_before.virtual_start {
+        fail("selftest: heap virtual grow low");
+    }
+    if grown >= growth_after.virtual_end {
+        fail("selftest: heap virtual grow high");
+    }
+    unchecked {
+        const ptr = grown as! *u8;
+        *ptr = 0x5a;
+        if *ptr != 0x5a {
+            fail("selftest: heap virtual grow touch");
+        }
+    }
 }
 
 pub fn run_memory_map_tests(map: Layout): void {
@@ -316,7 +380,7 @@ pub fn run_memory_map_tests(map: Layout): void {
     }
 }
 
-pub fn run_vm_contract_tests(map: Layout): void {
+pub fn run_vm_contract_tests(map: Layout, spec: Spec): void {
     if !vm.is_power_of_two(map.page_size) {
         fail("selftest: vm page size power");
     }
@@ -326,8 +390,56 @@ pub fn run_vm_contract_tests(map: Layout): void {
     if !vm.is_page_aligned(map.ram_end, map.page_size) {
         fail("selftest: vm ram end align");
     }
-    if !vm.validate_kernel_heap_range() {
+    if !vm.validate_kernel_heap_range(spec) {
         fail("selftest: vm heap range");
+    }
+    if vm.kernel_virtual_base_for_spec(spec) == 0 {
+        fail("selftest: vm kernel virtual base");
+    }
+    if vm.kernel_heap_virtual_base_for_spec(spec) < vm.kernel_virtual_base_for_spec(spec) {
+        fail("selftest: vm heap below kernel virtual base");
+    }
+    if vm.kernel_heap_virtual_end_for_spec(spec) <= vm.kernel_heap_virtual_base_for_spec(spec) {
+        fail("selftest: vm heap virtual end");
+    }
+    if vm.kernel_heap_virtual_base_for_spec(spec) - vm.kernel_virtual_base_for_spec(spec) != vm.kernel_heap_virtual_offset {
+        fail("selftest: vm heap virtual offset");
+    }
+    if vm.user_virtual_base_for_spec(spec) != 0 {
+        fail("selftest: vm user base");
+    }
+    if vm.user_virtual_end_for_spec(spec) != (1 << (spec.virtual_address_bits - 1)) {
+        fail("selftest: vm user end");
+    }
+    if !vm.is_user_virtual_range(vm.user_virtual_base_for_spec(spec), spec.page_size, spec) {
+        fail("selftest: vm user range start");
+    }
+    if !vm.is_user_virtual_range(vm.user_virtual_end_for_spec(spec) - spec.page_size, spec.page_size, spec) {
+        fail("selftest: vm user range end");
+    }
+    if vm.is_user_virtual_range(vm.user_virtual_end_for_spec(spec), spec.page_size, spec) {
+        fail("selftest: vm user range overflow");
+    }
+    if !vm.is_kernel_virtual_range(vm.kernel_virtual_base_for_spec(spec), spec.page_size, spec) {
+        fail("selftest: vm kernel range start");
+    }
+    if vm.is_kernel_virtual_range(vm.user_virtual_base_for_spec(spec), spec.page_size, spec) {
+        fail("selftest: vm user not kernel range");
+    }
+    if !vm.validate_user_page_mapping(vm.user_virtual_base_for_spec(spec), map.ram_start, vm.rights_user_rw(), spec) {
+        fail("selftest: vm user mapping valid");
+    }
+    if vm.validate_user_page_mapping(vm.kernel_virtual_base_for_spec(spec), map.ram_start, vm.rights_user_rw(), spec) {
+        fail("selftest: vm user mapping kernel addr");
+    }
+    if vm.validate_user_page_mapping(vm.user_virtual_base_for_spec(spec), map.ram_start, vm.rights_kernel_rw(), spec) {
+        fail("selftest: vm user mapping kernel rights");
+    }
+    if !vm.validate_kernel_page_mapping(vm.kernel_heap_virtual_base_for_spec(spec), map.ram_start, vm.rights_kernel_rw(), spec) {
+        fail("selftest: vm kernel mapping valid");
+    }
+    if vm.validate_kernel_page_mapping(vm.kernel_heap_virtual_base_for_spec(spec), map.ram_start, vm.rights_user_rw(), spec) {
+        fail("selftest: vm kernel mapping user rights");
     }
 
     const phys = map.kernel_load;
@@ -348,13 +460,28 @@ pub fn run_vm_contract_tests(map: Layout): void {
     if (vm.rights_kernel_rx() & vm.rights_write) != 0 {
         fail("selftest: vm rx write");
     }
+    if !vm.rights_are_valid(vm.rights_kernel_rw()) {
+        fail("selftest: vm kernel rw rights");
+    }
+    if !vm.rights_are_valid(vm.rights_kernel_rx()) {
+        fail("selftest: vm kernel rx rights");
+    }
+    if vm.rights_are_valid(0) {
+        fail("selftest: vm empty rights");
+    }
+    if vm.rights_are_valid(vm.rights_write) {
+        fail("selftest: vm write without read");
+    }
 
-    const plan = vm.bootstrap_plan(map);
+    const plan = vm.bootstrap_plan(map, spec);
     const snapshot = memory_map.snapshot();
     if plan.identity_region_count != snapshot.identity_region_count {
         fail("selftest: vm identity count");
     }
-    if plan.mapping_request_count != snapshot.identity_region_count {
+    if plan.kernel_heap_mapping_count != 1 {
+        fail("selftest: vm heap mapping count");
+    }
+    if plan.mapping_request_count != snapshot.identity_region_count + plan.kernel_heap_mapping_count {
         fail("selftest: vm mapping count");
     }
     if plan.page_table_root == 0 {
@@ -378,11 +505,20 @@ pub fn run_vm_contract_tests(map: Layout): void {
     if plan.identity_region_count == 0 {
         fail("selftest: vm identity empty");
     }
-    if plan.kernel_heap_base != vm.kernel_heap_virtual_base {
+    if plan.kernel_heap_base != vm.kernel_heap_virtual_base_for_spec(spec) {
         fail("selftest: vm heap base");
     }
-    if plan.kernel_heap_end != vm.kernel_heap_virtual_end {
+    if plan.kernel_heap_end != vm.kernel_heap_virtual_end_for_spec(spec) {
         fail("selftest: vm heap end");
+    }
+    if plan.user_base != vm.user_virtual_base_for_spec(spec) {
+        fail("selftest: vm plan user base");
+    }
+    if plan.user_end != vm.user_virtual_end_for_spec(spec) {
+        fail("selftest: vm plan user end");
+    }
+    if plan.kernel_base != vm.kernel_virtual_base_for_spec(spec) {
+        fail("selftest: vm plan kernel base");
     }
     if plan.page_size != map.page_size {
         fail("selftest: vm page size");
@@ -394,6 +530,8 @@ pub fn run_vm_contract_tests(map: Layout): void {
 
     var index: usize = 0;
     var saw_page_tables = false;
+    var saw_heap_virtual = false;
+    const heap_used = heap.snapshot();
     while index < vm.mapping_request_count() {
         const request = vm.mapping_request(index);
         if request.size == 0 {
@@ -408,8 +546,21 @@ pub fn run_vm_contract_tests(map: Layout): void {
         if !vm.is_page_aligned(request.phys_start + request.size, map.page_size) {
             fail("selftest: vm mapping end align");
         }
-        if request.virt_start != vm.identity_virtual_for_phys(request.phys_start) {
-            fail("selftest: vm mapping identity");
+        if request.kind == memory_map.kind_kernel_heap_virtual {
+            saw_heap_virtual = true;
+            if request.virt_start != plan.kernel_heap_base {
+                fail("selftest: vm heap virtual start");
+            }
+            if request.phys_start != heap_used.start {
+                fail("selftest: vm heap virtual phys");
+            }
+            if request.size != heap_used.committed_pages * map.page_size {
+                fail("selftest: vm heap virtual size");
+            }
+        } else {
+            if request.virt_start != vm.identity_virtual_for_phys(request.phys_start) {
+                fail("selftest: vm mapping identity");
+            }
         }
         if vm.rights_has_user(request.rights) {
             fail("selftest: vm mapping user");
@@ -439,6 +590,92 @@ pub fn run_vm_contract_tests(map: Layout): void {
     }
     if !saw_page_tables {
         fail("selftest: vm page table mapping");
+    }
+    if !saw_heap_virtual {
+        fail("selftest: vm heap virtual mapping");
+    }
+}
+
+pub fn run_address_space_tests(map: Layout, spec: Spec, kernel_space_id: usize): void {
+    if address_space.count() != 1 {
+        fail("selftest: address space kernel count");
+    }
+    if address_space.current() != kernel_space_id {
+        fail("selftest: address space current kernel");
+    }
+
+    const expected_user_base = vm.user_virtual_base_for_spec(spec);
+    const expected_user_end = vm.user_virtual_end_for_spec(spec);
+    const expected_kernel_base = vm.kernel_virtual_base_for_spec(spec);
+    const expected_heap_base = vm.kernel_heap_virtual_base_for_spec(spec);
+    const expected_heap_end = vm.kernel_heap_virtual_end_for_spec(spec);
+    if address_space.kind(kernel_space_id) != address_space.kind_kernel {
+        fail("selftest: address space kernel kind");
+    }
+    if address_space.root_table(kernel_space_id) == 0 {
+        fail("selftest: address space kernel root");
+    }
+    if !address_space.active(kernel_space_id) {
+        fail("selftest: address space kernel active");
+    }
+    if address_space.user_base(kernel_space_id) != expected_user_base {
+        fail("selftest: address space user base");
+    }
+    if address_space.user_end(kernel_space_id) != expected_user_end {
+        fail("selftest: address space user end");
+    }
+    if address_space.kernel_base(kernel_space_id) != expected_kernel_base {
+        fail("selftest: address space kernel base");
+    }
+    if address_space.kernel_heap_base(kernel_space_id) != expected_heap_base {
+        fail("selftest: address space heap base");
+    }
+    if address_space.kernel_heap_end(kernel_space_id) != expected_heap_end {
+        fail("selftest: address space heap end");
+    }
+    if !address_space.has_root(kernel_space_id) {
+        fail("selftest: address space kernel has root");
+    }
+    if !address_space.can_map_kernel_page(kernel_space_id, expected_heap_base, map.ram_start, vm.rights_kernel_rw(), spec) {
+        fail("selftest: address space kernel map");
+    }
+    if address_space.can_map_kernel_page(kernel_space_id, expected_heap_base, map.ram_start, vm.rights_user_rw(), spec) {
+        fail("selftest: address space kernel user rights");
+    }
+    if address_space.can_map_user_page(kernel_space_id, expected_user_base, map.ram_start, vm.rights_user_rw(), spec) {
+        fail("selftest: address space kernel user map");
+    }
+
+    const user_space_id = address_space.create_user_draft(spec);
+    if user_space_id == address_space.invalid_id {
+        fail("selftest: address space user create");
+    }
+    if address_space.count() != 2 {
+        fail("selftest: address space user count");
+    }
+    if address_space.kind(user_space_id) != address_space.kind_user {
+        fail("selftest: address space user kind");
+    }
+    if address_space.root_table(user_space_id) != 0 {
+        fail("selftest: address space user root");
+    }
+    if address_space.active(user_space_id) {
+        fail("selftest: address space user inactive");
+    }
+    if !address_space.accepts_user_mapping_policy(user_space_id, expected_user_base, map.ram_start, vm.rights_user_rw(), spec) {
+        fail("selftest: address space user policy");
+    }
+    if address_space.accepts_user_mapping_policy(user_space_id, expected_kernel_base, map.ram_start, vm.rights_user_rw(), spec) {
+        fail("selftest: address space user policy kernel addr");
+    }
+    if address_space.can_map_user_page(user_space_id, expected_user_base, map.ram_start, vm.rights_user_rw(), spec) {
+        fail("selftest: address space user map without root");
+    }
+    if address_space.status() != address_space.status_root_unallocated {
+        fail("selftest: address space user root status");
+    }
+    if address_space.can_map_kernel_page(user_space_id, expected_heap_base, map.ram_start, vm.rights_kernel_rw(), spec) {
+        fail("selftest: address space user kernel map");
     }
 }
 
@@ -474,6 +711,32 @@ fn check_riscv64_leaf_entry(phys: usize, rights: u8, should_write: bool, should_
     }
 }
 
+fn check_arch_user_leaf_entries(arch: i32, phys: usize): void {
+    if arch == page_table.arch_aarch64 {
+        const user_entry = aarch64_page_table.encode_leaf(phys, vm.rights_user_rw());
+        const kernel_entry = aarch64_page_table.encode_leaf(phys, vm.rights_kernel_rw());
+        if !aarch64_page_table.leaf_is_user_accessible(user_entry) {
+            fail("selftest: aarch64 user leaf user");
+        }
+        if aarch64_page_table.leaf_is_user_accessible(kernel_entry) {
+            fail("selftest: aarch64 kernel leaf user");
+        }
+        return;
+    }
+    if arch == page_table.arch_riscv64 {
+        const user_entry = riscv64_page_table.encode_leaf(phys, vm.rights_user_rw());
+        const kernel_entry = riscv64_page_table.encode_leaf(phys, vm.rights_kernel_rw());
+        if !riscv64_page_table.leaf_is_user_accessible(user_entry) {
+            fail("selftest: riscv64 user leaf user");
+        }
+        if riscv64_page_table.leaf_is_user_accessible(kernel_entry) {
+            fail("selftest: riscv64 kernel leaf user");
+        }
+        return;
+    }
+    fail("selftest: page table user leaf arch");
+}
+
 fn check_arch_leaf_entries(arch: i32, phys: usize): void {
     if !vm.is_page_aligned(phys, 4096) {
         fail("selftest: page table leaf phys align");
@@ -491,30 +754,89 @@ fn check_arch_leaf_entries(arch: i32, phys: usize): void {
     fail("selftest: page table arch");
 }
 
-fn lookup_arch_bootstrap_phys(arch: i32, spec: Spec, virt: usize): usize {
+fn lookup_arch_bootstrap_phys(arch: i32, virt: usize, page_size: usize, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, entry_size: usize): usize {
     if arch == page_table.arch_aarch64 {
-        return aarch64_page_table.lookup_bootstrap_phys(spec, virt);
+        return aarch64_page_table.lookup_bootstrap_phys_geometry(virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size);
     }
     if arch == page_table.arch_riscv64 {
-        return riscv64_page_table.lookup_bootstrap_phys(spec, virt);
+        return riscv64_page_table.lookup_bootstrap_phys_geometry(virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size);
     }
     return 0;
 }
 
-fn check_arch_bootstrap_mappings(arch: i32, spec: Spec): void {
+fn map_arch_bootstrap_page(arch: i32, kind: i32, virt: usize, phys: usize, rights: u8, page_size: usize, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, entry_size: usize): bool {
+    if arch == page_table.arch_aarch64 {
+        return aarch64_page_table.map_bootstrap_page_for_kind_geometry(kind, virt, phys, rights, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size);
+    }
+    if arch == page_table.arch_riscv64 {
+        return riscv64_page_table.map_bootstrap_page_geometry(virt, phys, rights, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size);
+    }
+    return false;
+}
+
+fn unmap_arch_bootstrap_page(arch: i32, virt: usize, page_size: usize, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, entry_size: usize): bool {
+    if arch == page_table.arch_aarch64 {
+        return aarch64_page_table.unmap_bootstrap_page_geometry(virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size);
+    }
+    if arch == page_table.arch_riscv64 {
+        return riscv64_page_table.unmap_bootstrap_page_geometry(virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size);
+    }
+    return false;
+}
+
+fn check_arch_bootstrap_mappings(arch: i32, page_size: usize, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, entry_size: usize): void {
     var index: usize = 0;
     while index < vm.mapping_request_count() {
         const request = vm.mapping_request(index);
-        if lookup_arch_bootstrap_phys(arch, spec, request.virt_start) != request.phys_start {
+        if lookup_arch_bootstrap_phys(arch, request.virt_start, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) != request.phys_start {
             fail("selftest: page table lookup start");
         }
-        if request.size > spec.page_size {
-            const last_offset = request.size - spec.page_size;
-            if lookup_arch_bootstrap_phys(arch, spec, request.virt_start + last_offset) != request.phys_start + last_offset {
+        if request.size > page_size {
+            const last_offset = request.size - page_size;
+            if lookup_arch_bootstrap_phys(arch, request.virt_start + last_offset, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) != request.phys_start + last_offset {
                 fail("selftest: page table lookup end");
             }
         }
         index = index + 1;
+    }
+}
+
+fn check_arch_map_unmap_operations(arch: i32, page_size: usize, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, entry_size: usize): void {
+    const request = vm.mapping_request(0);
+    const virt = request.virt_start;
+    const phys = request.phys_start;
+    if lookup_arch_bootstrap_phys(arch, virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) != phys {
+        fail("selftest: page table map op fixture");
+    }
+    if map_arch_bootstrap_page(arch, request.kind, virt, phys, request.rights, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+        fail("selftest: page table map overwrite");
+    }
+    if unmap_arch_bootstrap_page(arch, virt + 1, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+        fail("selftest: page table unmap unaligned");
+    }
+    if !unmap_arch_bootstrap_page(arch, virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+        fail("selftest: page table unmap");
+    }
+    if lookup_arch_bootstrap_phys(arch, virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) != 0 {
+        fail("selftest: page table lookup unmapped");
+    }
+    if unmap_arch_bootstrap_page(arch, virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+        fail("selftest: page table unmap absent");
+    }
+    if map_arch_bootstrap_page(arch, request.kind, virt + 1, phys, request.rights, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+        fail("selftest: page table map unaligned virt");
+    }
+    if map_arch_bootstrap_page(arch, request.kind, virt, phys + 1, request.rights, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+        fail("selftest: page table map unaligned phys");
+    }
+    if map_arch_bootstrap_page(arch, request.kind, virt, phys, 0, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+        fail("selftest: page table map empty rights");
+    }
+    if !map_arch_bootstrap_page(arch, request.kind, virt, phys, request.rights, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+        fail("selftest: page table remap");
+    }
+    if lookup_arch_bootstrap_phys(arch, virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) != phys {
+        fail("selftest: page table lookup remapped");
     }
 }
 
@@ -530,6 +852,12 @@ fn check_aarch64_activation_values(root: usize): void {
     }
     if (aarch64_page_table.activation_tcr() & aarch64_page_table.tcr_ips_40_bit) == 0 {
         fail("selftest: aarch64 activation tcr ips");
+    }
+    if (aarch64_page_table.activation_tcr() & aarch64_page_table.tcr_t1sz_48_bit) == 0 {
+        fail("selftest: aarch64 activation tcr t1sz");
+    }
+    if (aarch64_page_table.activation_tcr() & aarch64_page_table.tcr_tg1_4k) == 0 {
+        fail("selftest: aarch64 activation tcr tg1");
     }
     if (aarch64_page_table.activation_sctlr_set_bits() & aarch64_page_table.sctlr_mmu_enable) == 0 {
         fail("selftest: aarch64 activation sctlr mmu");
@@ -584,6 +912,8 @@ pub fn run_page_table_contract_tests(map: Layout, spec: Spec, arch: i32): void {
         fail("selftest: page table phys bits");
     }
     check_arch_leaf_entries(arch, map.kernel_load);
-    check_arch_bootstrap_mappings(arch, spec);
-    check_arch_activation_values(arch, vm.bootstrap_plan(map).page_table_root);
+    check_arch_user_leaf_entries(arch, map.kernel_load);
+    check_arch_bootstrap_mappings(arch, spec.page_size, spec.page_offset_bits, spec.level_count, spec.level_index_bits, spec.entries_per_table, spec.entry_size);
+    check_arch_map_unmap_operations(arch, spec.page_size, spec.page_offset_bits, spec.level_count, spec.level_index_bits, spec.entries_per_table, spec.entry_size);
+    check_arch_activation_values(arch, vm.bootstrap_plan(map, spec).page_table_root);
 }

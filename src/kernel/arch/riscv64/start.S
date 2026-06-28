@@ -60,3 +60,9 @@ cycor_riscv64_activate_identity_vm:
     csrw satp, a0
     sfence.vma zero, zero
     ret
+
+.global cycor_riscv64_flush_kernel_tlb
+.type cycor_riscv64_flush_kernel_tlb, @function
+cycor_riscv64_flush_kernel_tlb:
+    sfence.vma zero, zero
+    ret

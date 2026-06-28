@@ -1,6 +1,7 @@
 import .kernel.kernel;
 import .kernel.arch.aarch64.page_table as aarch64_page_table;
 import .kernel.arch.riscv64.page_table as riscv64_page_table;
+import .kernel.memory.address_space;
 import .kernel.memory.heap;
 import { Layout } from .kernel.memory.layout;
 import .kernel.memory.boot as boot_memory;
@@ -37,7 +38,7 @@ pub fn prepare_memory(map: Layout, page_tables: Spec, page_table_arch: i32): voi
     if !memory_map.rebuild(map) {
         panic_mod.panic();
     }
-    if !vm.rebuild_bootstrap_mappings(map) {
+    if !vm.rebuild_bootstrap_mappings(map, page_tables) {
         panic_mod.panic();
     }
     if !vm.allocate_bootstrap_page_tables(map, page_tables) {
@@ -51,18 +52,29 @@ pub fn prepare_memory(map: Layout, page_tables: Spec, page_table_arch: i32): voi
     if !memory_map.rebuild(map) {
         panic_mod.panic();
     }
-    if !vm.rebuild_bootstrap_mappings(map) {
+    if !vm.rebuild_bootstrap_mappings(map, page_tables) {
         panic_mod.panic();
     }
     if !populate_bootstrap_page_tables(page_tables, page_table_arch) {
         panic_mod.panic();
     }
     selftest.run_memory_map_tests(map);
-    selftest.run_vm_contract_tests(map);
+    selftest.run_vm_contract_tests(map, page_tables);
     selftest.run_page_table_contract_tests(map, page_tables, page_table_arch);
+    address_space.init();
+    const plan = vm.bootstrap_plan(map, page_tables);
+    const kernel_space = address_space.create_kernel_bootstrap(plan.page_table_root, plan.user_base, plan.user_end, plan.kernel_base, plan.kernel_heap_base, plan.kernel_heap_end);
+    if kernel_space == address_space.invalid_id {
+        panic_mod.panic();
+    }
+    selftest.run_address_space_tests(map, page_tables, kernel_space);
+    if !heap.enable_virtual_mapping(vm.kernel_heap_virtual_base_for_spec(page_tables)) {
+        panic_mod.panic();
+    }
 }
 
-pub fn finish_after_memory_ready(): void {
+pub fn finish_after_memory_ready(page_size: usize, kernel_heap_virtual_base: usize): void {
+    selftest.run_heap_virtual_tests(page_size, kernel_heap_virtual_base);
     kernel.print_memory_ready();
     kernel.halt();
 }

@@ -434,6 +434,10 @@ Current pre-VM policy:
 - lazily commits pages from `phys`
 - keeps committed pages physically contiguous so the memory map can describe
   them with one `pre_vm_heap` region
+- switches allocation results to the mapped architecture-canonical heap virtual
+  range after bootstrap page tables are populated
+- grows in virtual mode by allocating physical pages and mapping them into the
+  active heap virtual range
 - does not reuse deallocated allocations yet
 - requires nonzero power-of-two alignment
 - tracks requested bytes separately from used bytes
@@ -553,9 +557,9 @@ This is full bootstrap table population for the current identity-map requests.
 
 Architecture modules publish the register values required by activation:
 
-- AArch64: `TTBR0_EL1` root address, `MAIR_EL1` normal/device attributes,
-  `TCR_EL1` 4 KiB 48-bit VA / 40-bit PA translation settings, and
-  `SCTLR_EL1` enable bits.
+- AArch64: shared `TTBR0_EL1`/`TTBR1_EL1` root address, `MAIR_EL1`
+  normal/device attributes, `TCR_EL1` 4 KiB 48-bit lower/upper VA / 40-bit PA
+  translation settings, and `SCTLR_EL1` enable bits.
 - RISC-V64: `satp` value for Sv39 with the root page-table physical page
   number.
 
@@ -577,7 +581,9 @@ section-level W^X mappings exist.
 VM bootstrap mapping requests are generated from the canonical memory map:
 
 - one request per non-`free_ram` region
-- virtual address equals physical address
+- identity requests use virtual address equals physical address
+- one additional `kernel_heap_virtual` request maps committed heap pages into
+  the architecture-canonical high-half heap range
 - start and end must be page-aligned
 - platform UART MMIO is represented as `device_mmio`
 - kernel image temporarily maps read/write/execute
@@ -587,7 +593,8 @@ VM bootstrap mapping requests are generated from the canonical memory map:
 - no bootstrap mapping request may set user access
 
 These requests are now consumed by architecture page-table population code.
-They remain the source-of-truth policy data for the bootstrap identity map.
+They remain the source-of-truth policy data for the bootstrap identity map and
+the first kernel heap virtual alias.
 
 The current `kernel_image` memory-map range covers text, rodata, data, bss, and
 the bootstrap stack because the linker does not yet publish section-level
@@ -601,25 +608,29 @@ The bootstrap VM plan is intentionally conservative:
   true
 - keep the kernel image, boot allocator range, physical page bitmap, pre-VM
   heap, MMIO, and stack reachable by their current addresses
-- reserve a named high-half kernel heap virtual range for later heap migration
+- reserve a named architecture-canonical kernel heap virtual range for later
+  heap migration
+- map committed pre-VM heap pages at the start of that virtual range while
+  preserving their identity mapping during bootstrap
 - keep physical frame ownership in `phys`; VM consumes frames but does not own
   the free/used policy
-- the initial named kernel virtual range starts at `0xffff800000000000`
+- the initial AArch64 kernel virtual range starts at `0xffff800000000000`;
+  RISC-V Sv39 uses its own sign-extended upper-half base
 
 Near-term VM goals:
 
 - define physical-address and virtual-address naming conventions: done
 - identity-map the kernel image and all non-`free_ram` memory-map regions:
   encoded and activated for the bootstrap map
-- establish a kernel virtual range for future heap migration: named, not mapped
+- establish a kernel virtual range for future heap migration: architecture-canonical, named, not mapped
 - define page-table geometry per architecture: done
 - encode architecture leaf entries for bootstrap mapping rights: done
 - allocate bootstrap page-table storage from physical memory: done
 - zero page-table storage and verify non-leaf descriptor encoding: done
 - populate bootstrap identity page tables from VM mapping requests: done
 - activate bootstrap identity mappings on both QEMU targets: done
-- add page map/unmap operations with explicit rights
-- prepare user/kernel address separation
+- add page map/unmap operations with explicit rights: done for bootstrap tables
+- prepare user/kernel address separation: range and rights contracts done
 
 ## Kernel Object and Capability Model
 
@@ -1030,16 +1041,16 @@ Done:
 - bootstrap identity page-table population and lookup selftests
 - platform UART MMIO identity mapping contract
 - architecture MMU activation register-value contract
+- bootstrap page map/unmap operations with explicit rights
 - heap diagnostics
 - AArch64/RISC-V boot checks
 
 Next:
 
-- kernel identity mapping activation from memory map
-- architecture MMU register write shims and barriers
-- kernel virtual heap range
+- kernel virtual heap range: architecture-canonical and mapped for committed
+  pre-VM heap pages
 - transition heap from pre-VM physical identity mapping to VM-backed virtual
-  mapping
+  mapping: done for committed bootstrap heap pages and dynamic page growth
 
 ### Phase 4 — Virtual Memory and Address Spaces
 
@@ -1057,7 +1068,8 @@ Deliverables:
 - identity mapping for boot-owned regions
 - kernel heap virtual range
 - user/kernel memory split
-- address-space object draft
+- address-space object draft: fixed-table kernel/user metadata with mapping
+  policy checks
 
 ### Phase 5 — Kernel Objects and Capabilities
 

@@ -49,6 +49,16 @@ cycor_aarch64_el1_entry:
     // below this label and should not need to branch on CurrentEL.
     ldr x0, =__stack_top
     mov sp, x0
+
+    // Cyna/LLVM may use FP/SIMD registers for aggregate constants and copies.
+    // Enable EL1 access before the first compiled instruction can touch a Q
+    // register; EL2 trapping is already disabled above for the EL2 entry path.
+    mrs x0, cpacr_el1
+    mov x1, #(3 << 20)
+    orr x0, x0, x1
+    msr cpacr_el1, x0
+    isb
+
     bl cycor_kernel_entry
 
 1:
@@ -59,7 +69,7 @@ cycor_aarch64_el1_entry:
 .type cycor_aarch64_activate_identity_vm, %function
 cycor_aarch64_activate_identity_vm:
     // C ABI:
-    //   x0 = TTBR0_EL1 root table address
+    //   x0 = TTBR0_EL1/TTBR1_EL1 root table address
     //   x1 = MAIR_EL1 value
     //   x2 = TCR_EL1 value
     //   x3 = SCTLR_EL1 bits to set
@@ -67,6 +77,7 @@ cycor_aarch64_activate_identity_vm:
     msr mair_el1, x1
     msr tcr_el1, x2
     msr ttbr0_el1, x0
+    msr ttbr1_el1, x0
     isb
     tlbi vmalle1
     dsb ish
@@ -79,5 +90,14 @@ cycor_aarch64_activate_identity_vm:
     bic x4, x4, x7
     orr x4, x4, x3
     msr sctlr_el1, x4
+    isb
+    ret
+
+.global cycor_aarch64_flush_kernel_tlb
+.type cycor_aarch64_flush_kernel_tlb, %function
+cycor_aarch64_flush_kernel_tlb:
+    dsb ishst
+    tlbi vmalle1
+    dsb ish
     isb
     ret

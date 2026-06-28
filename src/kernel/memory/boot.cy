@@ -11,12 +11,24 @@ var heap_next: usize = 0;
 var heap_end: usize = 0;
 var frozen: bool = false;
 
+const max_usize: usize = 0 - 1;
+
+fn is_power_of_two(value: usize): bool {
+    if value == 0 {
+        return false;
+    }
+    return (value & (value - 1)) == 0;
+}
+
 pub fn align_up(value: usize, alignment: usize): usize {
-    if alignment == 0 {
-        return value;
+    if !is_power_of_two(alignment) {
+        return 0;
     }
 
     const mask = alignment - 1;
+    if value > max_usize - mask {
+        return 0;
+    }
     return (value + mask) & (0 - alignment);
 }
 
@@ -35,6 +47,12 @@ pub fn reserve(size: usize, alignment: usize): usize {
     }
 
     const aligned = align_up(heap_next, alignment);
+    if aligned == 0 {
+        return 0;
+    }
+    if aligned > max_usize - size {
+        return 0;
+    }
     const next = aligned + size;
     if next > heap_end {
         return 0;

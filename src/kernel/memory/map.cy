@@ -11,6 +11,7 @@ pub const kind_pre_vm_heap: i32 = 4;
 pub const kind_device_mmio: i32 = 5;
 pub const kind_kernel_stack: i32 = 6;
 pub const kind_bootstrap_page_tables: i32 = 7;
+pub const kind_kernel_heap_virtual: i32 = 8;
 
 pub struct Region {
     pub start: usize;
