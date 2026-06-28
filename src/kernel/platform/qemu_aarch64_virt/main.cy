@@ -35,5 +35,5 @@ export c("cycor_kernel_entry") fn cycor_kernel_entry(): void {
     const map = memory.layout();
     boot.prepare_memory(map, page_table.spec(), page_table.arch_id);
     vm_activation.activate_identity_vm(vm.bootstrap_plan(map, page_table.spec()).page_table_root);
-    boot.finish_after_memory_ready(map.page_size, vm.kernel_heap_virtual_base_for_spec(page_table.spec()));
+    boot.finish_after_memory_ready(map, page_table.spec());
 }

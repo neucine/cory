@@ -73,8 +73,8 @@ pub fn prepare_memory(map: Layout, page_tables: Spec, page_table_arch: i32): voi
     }
 }
 
-pub fn finish_after_memory_ready(page_size: usize, kernel_heap_virtual_base: usize): void {
-    selftest.run_heap_virtual_tests(page_size, kernel_heap_virtual_base);
+pub fn finish_after_memory_ready(map: Layout, page_tables: Spec): void {
+    selftest.run_heap_virtual_tests(map, page_tables);
     kernel.print_memory_ready();
     kernel.halt();
 }

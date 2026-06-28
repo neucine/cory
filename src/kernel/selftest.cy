@@ -213,15 +213,15 @@ pub fn run_heap_tests(map: Layout): void {
     }
 }
 
-pub fn run_heap_virtual_tests(page_size: usize, kernel_heap_virtual_base: usize): void {
+pub fn run_heap_virtual_tests(map: Layout, spec: Spec): void {
     if !heap.returns_virtual() {
         fail("selftest: heap virtual mode");
     }
     const before = heap.snapshot();
-    if before.virtual_start != kernel_heap_virtual_base {
+    if before.virtual_start != vm.kernel_heap_virtual_base_for_spec(spec) {
         fail("selftest: heap virtual start");
     }
-    if before.virtual_end != before.virtual_start + (before.committed_pages * page_size) {
+    if before.virtual_end != before.virtual_start + (before.committed_pages * map.page_size) {
         fail("selftest: heap virtual end");
     }
     const allocated = heap.allocate(32, 16);
@@ -255,7 +255,7 @@ pub fn run_heap_virtual_tests(page_size: usize, kernel_heap_virtual_base: usize)
     if growth_after.committed_pages != growth_before.committed_pages + 1 {
         fail("selftest: heap virtual grow pages");
     }
-    if growth_after.virtual_end != growth_before.virtual_end + page_size {
+    if growth_after.virtual_end != growth_before.virtual_end + map.page_size {
         fail("selftest: heap virtual grow end");
     }
     if grown < growth_before.virtual_start {
