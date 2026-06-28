@@ -754,46 +754,46 @@ fn check_arch_leaf_entries(arch: i32, phys: usize): void {
     fail("selftest: page table arch");
 }
 
-fn lookup_arch_bootstrap_phys(arch: i32, virt: usize, page_size: usize, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, entry_size: usize): usize {
+fn lookup_arch_bootstrap_phys(arch: i32, spec: Spec, virt: usize): usize {
     if arch == page_table.arch_aarch64 {
-        return aarch64_page_table.lookup_bootstrap_phys_geometry(virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size);
+        return aarch64_page_table.lookup_bootstrap_phys(spec, virt);
     }
     if arch == page_table.arch_riscv64 {
-        return riscv64_page_table.lookup_bootstrap_phys_geometry(virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size);
+        return riscv64_page_table.lookup_bootstrap_phys(spec, virt);
     }
     return 0;
 }
 
-fn map_arch_bootstrap_page(arch: i32, kind: i32, virt: usize, phys: usize, rights: u8, page_size: usize, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, entry_size: usize): bool {
+fn map_arch_bootstrap_page(arch: i32, spec: Spec, kind: i32, virt: usize, phys: usize, rights: u8): bool {
     if arch == page_table.arch_aarch64 {
-        return aarch64_page_table.map_bootstrap_page_for_kind_geometry(kind, virt, phys, rights, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size);
+        return aarch64_page_table.map_bootstrap_page_for_kind(spec, kind, virt, phys, rights);
     }
     if arch == page_table.arch_riscv64 {
-        return riscv64_page_table.map_bootstrap_page_geometry(virt, phys, rights, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size);
+        return riscv64_page_table.map_bootstrap_page(spec, virt, phys, rights);
     }
     return false;
 }
 
-fn unmap_arch_bootstrap_page(arch: i32, virt: usize, page_size: usize, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, entry_size: usize): bool {
+fn unmap_arch_bootstrap_page(arch: i32, spec: Spec, virt: usize): bool {
     if arch == page_table.arch_aarch64 {
-        return aarch64_page_table.unmap_bootstrap_page_geometry(virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size);
+        return aarch64_page_table.unmap_bootstrap_page(spec, virt);
     }
     if arch == page_table.arch_riscv64 {
-        return riscv64_page_table.unmap_bootstrap_page_geometry(virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size);
+        return riscv64_page_table.unmap_bootstrap_page(spec, virt);
     }
     return false;
 }
 
-fn check_arch_bootstrap_mappings(arch: i32, page_size: usize, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, entry_size: usize): void {
+fn check_arch_bootstrap_mappings(arch: i32, spec: Spec): void {
     var index: usize = 0;
     while index < vm.mapping_request_count() {
         const request = vm.mapping_request(index);
-        if lookup_arch_bootstrap_phys(arch, request.virt_start, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) != request.phys_start {
+        if lookup_arch_bootstrap_phys(arch, spec, request.virt_start) != request.phys_start {
             fail("selftest: page table lookup start");
         }
-        if request.size > page_size {
-            const last_offset = request.size - page_size;
-            if lookup_arch_bootstrap_phys(arch, request.virt_start + last_offset, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) != request.phys_start + last_offset {
+        if request.size > spec.page_size {
+            const last_offset = request.size - spec.page_size;
+            if lookup_arch_bootstrap_phys(arch, spec, request.virt_start + last_offset) != request.phys_start + last_offset {
                 fail("selftest: page table lookup end");
             }
         }
@@ -801,41 +801,41 @@ fn check_arch_bootstrap_mappings(arch: i32, page_size: usize, page_offset_bits: 
     }
 }
 
-fn check_arch_map_unmap_operations(arch: i32, page_size: usize, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, entry_size: usize): void {
+fn check_arch_map_unmap_operations(arch: i32, spec: Spec): void {
     const request = vm.mapping_request(0);
     const virt = request.virt_start;
     const phys = request.phys_start;
-    if lookup_arch_bootstrap_phys(arch, virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) != phys {
+    if lookup_arch_bootstrap_phys(arch, spec, virt) != phys {
         fail("selftest: page table map op fixture");
     }
-    if map_arch_bootstrap_page(arch, request.kind, virt, phys, request.rights, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+    if map_arch_bootstrap_page(arch, spec, request.kind, virt, phys, request.rights) {
         fail("selftest: page table map overwrite");
     }
-    if unmap_arch_bootstrap_page(arch, virt + 1, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+    if unmap_arch_bootstrap_page(arch, spec, virt + 1) {
         fail("selftest: page table unmap unaligned");
     }
-    if !unmap_arch_bootstrap_page(arch, virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+    if !unmap_arch_bootstrap_page(arch, spec, virt) {
         fail("selftest: page table unmap");
     }
-    if lookup_arch_bootstrap_phys(arch, virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) != 0 {
+    if lookup_arch_bootstrap_phys(arch, spec, virt) != 0 {
         fail("selftest: page table lookup unmapped");
     }
-    if unmap_arch_bootstrap_page(arch, virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+    if unmap_arch_bootstrap_page(arch, spec, virt) {
         fail("selftest: page table unmap absent");
     }
-    if map_arch_bootstrap_page(arch, request.kind, virt + 1, phys, request.rights, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+    if map_arch_bootstrap_page(arch, spec, request.kind, virt + 1, phys, request.rights) {
         fail("selftest: page table map unaligned virt");
     }
-    if map_arch_bootstrap_page(arch, request.kind, virt, phys + 1, request.rights, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+    if map_arch_bootstrap_page(arch, spec, request.kind, virt, phys + 1, request.rights) {
         fail("selftest: page table map unaligned phys");
     }
-    if map_arch_bootstrap_page(arch, request.kind, virt, phys, 0, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+    if map_arch_bootstrap_page(arch, spec, request.kind, virt, phys, 0) {
         fail("selftest: page table map empty rights");
     }
-    if !map_arch_bootstrap_page(arch, request.kind, virt, phys, request.rights, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) {
+    if !map_arch_bootstrap_page(arch, spec, request.kind, virt, phys, request.rights) {
         fail("selftest: page table remap");
     }
-    if lookup_arch_bootstrap_phys(arch, virt, page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size) != phys {
+    if lookup_arch_bootstrap_phys(arch, spec, virt) != phys {
         fail("selftest: page table lookup remapped");
     }
 }
@@ -913,7 +913,7 @@ pub fn run_page_table_contract_tests(map: Layout, spec: Spec, arch: i32): void {
     }
     check_arch_leaf_entries(arch, map.kernel_load);
     check_arch_user_leaf_entries(arch, map.kernel_load);
-    check_arch_bootstrap_mappings(arch, spec.page_size, spec.page_offset_bits, spec.level_count, spec.level_index_bits, spec.entries_per_table, spec.entry_size);
-    check_arch_map_unmap_operations(arch, spec.page_size, spec.page_offset_bits, spec.level_count, spec.level_index_bits, spec.entries_per_table, spec.entry_size);
+    check_arch_bootstrap_mappings(arch, spec);
+    check_arch_map_unmap_operations(arch, spec);
     check_arch_activation_values(arch, vm.bootstrap_plan(map, spec).page_table_root);
 }

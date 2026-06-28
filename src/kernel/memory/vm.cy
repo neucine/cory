@@ -81,12 +81,8 @@ fn div_round_up(value: usize, divisor: usize): usize {
     return (value + divisor - 1) / divisor;
 }
 
-fn entry_addr_for_geometry(page_index: usize, entry_index: usize, page_size: usize, entry_size: usize): usize {
-    return bootstrap_page_table_root + (page_index * page_size) + (entry_index * entry_size);
-}
-
 fn entry_addr(page_index: usize, entry_index: usize, spec: Spec): usize {
-    return entry_addr_for_geometry(page_index, entry_index, spec.page_size, spec.entry_size);
+    return bootstrap_page_table_root + (page_index * spec.page_size) + (entry_index * spec.entry_size);
 }
 
 fn write_entry(page_index: usize, entry_index: usize, spec: Spec, raw: usize): void {
@@ -204,17 +200,13 @@ pub fn rights_are_valid(rights: u8): bool {
 }
 
 pub fn validate_page_mapping(virt: VirtAddr, phys: PhysAddr, rights: u8, spec: Spec): bool {
-    return validate_page_mapping_for_size(virt, phys, rights, spec.page_size);
-}
-
-pub fn validate_page_mapping_for_size(virt: VirtAddr, phys: PhysAddr, rights: u8, page_size: usize): bool {
     if !rights_are_valid(rights) {
         return false;
     }
-    if !is_page_aligned(virt, page_size) {
+    if !is_page_aligned(virt, spec.page_size) {
         return false;
     }
-    if !is_page_aligned(phys, page_size) {
+    if !is_page_aligned(phys, spec.page_size) {
         return false;
     }
     return true;
@@ -461,50 +453,32 @@ pub fn bootstrap_table_page_count(): usize {
 }
 
 pub fn page_table_level_index(virt: VirtAddr, spec: Spec, level: usize): usize {
-    return page_table_level_index_for_geometry(virt, spec.page_offset_bits, spec.level_count, spec.level_index_bits, spec.entries_per_table, level);
-}
-
-pub fn page_table_level_index_for_geometry(virt: VirtAddr, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, level: usize): usize {
-    if level >= level_count {
+    if level >= spec.level_count {
         return 0;
     }
-    const shift = page_offset_bits + ((level_count - 1 - level) * level_index_bits);
-    return (virt >> shift) & (entries_per_table - 1);
+    const shift = spec.page_offset_bits + ((spec.level_count - 1 - level) * spec.level_index_bits);
+    return (virt >> shift) & (spec.entries_per_table - 1);
 }
 
 pub fn write_bootstrap_table_entry(page_index: usize, entry_index: usize, spec: Spec, entry_raw: usize): bool {
-    return write_bootstrap_table_entry_for_geometry(page_index, entry_index, spec.page_size, spec.entries_per_table, spec.entry_size, entry_raw);
-}
-
-pub fn write_bootstrap_table_entry_for_geometry(page_index: usize, entry_index: usize, page_size: usize, entries_per_table: usize, entry_size: usize, entry_raw: usize): bool {
     if page_index >= bootstrap_page_table_pages {
         return false;
     }
-    if entry_index >= entries_per_table {
+    if entry_index >= spec.entries_per_table {
         return false;
     }
-    unchecked {
-        const ptr = entry_addr_for_geometry(page_index, entry_index, page_size, entry_size) as! *usize;
-        *ptr = entry_raw;
-    }
+    write_entry(page_index, entry_index, spec, entry_raw);
     return true;
 }
 
 pub fn read_bootstrap_table_entry(page_index: usize, entry_index: usize, spec: Spec): usize {
-    return read_bootstrap_table_entry_for_geometry(page_index, entry_index, spec.page_size, spec.entries_per_table, spec.entry_size);
-}
-
-pub fn read_bootstrap_table_entry_for_geometry(page_index: usize, entry_index: usize, page_size: usize, entries_per_table: usize, entry_size: usize): usize {
     if page_index >= bootstrap_page_table_pages {
         return 0;
     }
-    if entry_index >= entries_per_table {
+    if entry_index >= spec.entries_per_table {
         return 0;
     }
-    unchecked {
-        const ptr = entry_addr_for_geometry(page_index, entry_index, page_size, entry_size) as! *usize;
-        return *ptr;
-    }
+    return read_entry(page_index, entry_index, spec);
 }
 
 pub fn mapping_request_count(): usize {

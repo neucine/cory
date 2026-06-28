@@ -133,73 +133,61 @@ pub fn activation_sctlr_set_bits(): usize {
     return sctlr_mmu_enable;
 }
 
-fn ensure_child_table_for_geometry(parent_page: usize, entry_index: usize, page_size: usize, entries_per_table: usize, entry_size: usize): usize {
-    const existing = vm.read_bootstrap_table_entry_for_geometry(parent_page, entry_index, page_size, entries_per_table, entry_size);
+fn ensure_child_table(parent_page: usize, entry_index: usize, tables: Spec): usize {
+    const existing = vm.read_bootstrap_table_entry(parent_page, entry_index, tables);
     if existing != 0 {
         return vm.bootstrap_table_page_index(table_phys(TableEntry { raw: existing }));
     }
 
     const child = vm.allocate_bootstrap_table_page();
     if child == 0 {
-        return entries_per_table;
+        return tables.entries_per_table;
     }
     const entry = encode_table(child);
-    if !vm.write_bootstrap_table_entry_for_geometry(parent_page, entry_index, page_size, entries_per_table, entry_size, entry.raw) {
-        return entries_per_table;
+    if !vm.write_bootstrap_table_entry(parent_page, entry_index, tables, entry.raw) {
+        return tables.entries_per_table;
     }
     return vm.bootstrap_table_page_index(child);
 }
 
-fn ensure_child_table(parent_page: usize, entry_index: usize, tables: Spec): usize {
-    return ensure_child_table_for_geometry(parent_page, entry_index, tables.page_size, tables.entries_per_table, tables.entry_size);
-}
-
-fn leaf_table_page_for_geometry(page_size: usize, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, entry_size: usize, virt: usize, create: bool): usize {
+fn leaf_table_page_for_virt(tables: Spec, virt: usize, create: bool): usize {
     var table_page: usize = 0;
     var level: usize = 0;
-    while level < level_count - 1 {
-        const entry_index = vm.page_table_level_index_for_geometry(virt, page_offset_bits, level_count, level_index_bits, entries_per_table, level);
+    while level < tables.level_count - 1 {
+        const entry_index = vm.page_table_level_index(virt, tables, level);
         if create {
-            table_page = ensure_child_table_for_geometry(table_page, entry_index, page_size, entries_per_table, entry_size);
+            table_page = ensure_child_table(table_page, entry_index, tables);
         } else {
-            const raw = vm.read_bootstrap_table_entry_for_geometry(table_page, entry_index, page_size, entries_per_table, entry_size);
+            const raw = vm.read_bootstrap_table_entry(table_page, entry_index, tables);
             if raw == 0 {
-                return entries_per_table;
+                return tables.entries_per_table;
             }
             table_page = vm.bootstrap_table_page_index(table_phys(TableEntry { raw: raw }));
         }
         if table_page >= vm.bootstrap_table_page_count() {
-            return entries_per_table;
+            return tables.entries_per_table;
         }
         level = level + 1;
     }
     return table_page;
 }
 
-fn leaf_table_page_for_virt(tables: Spec, virt: usize, create: bool): usize {
-    return leaf_table_page_for_geometry(tables.page_size, tables.page_offset_bits, tables.level_count, tables.level_index_bits, tables.entries_per_table, tables.entry_size, virt, create);
-}
-
 pub fn map_bootstrap_page_for_kind(tables: Spec, kind: i32, virt: usize, phys: usize, rights: u8): bool {
-    return map_bootstrap_page_for_kind_geometry(kind, virt, phys, rights, tables.page_size, tables.page_offset_bits, tables.level_count, tables.level_index_bits, tables.entries_per_table, tables.entry_size);
-}
-
-pub fn map_bootstrap_page_for_kind_geometry(kind: i32, virt: usize, phys: usize, rights: u8, page_size: usize, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, entry_size: usize): bool {
-    if !vm.validate_page_mapping_for_size(virt, phys, rights, page_size) {
+    if !vm.validate_page_mapping(virt, phys, rights, tables) {
         return false;
     }
 
-    const table_page = leaf_table_page_for_geometry(page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size, virt, true);
+    const table_page = leaf_table_page_for_virt(tables, virt, true);
     if table_page >= vm.bootstrap_table_page_count() {
         return false;
     }
 
-    const leaf_index = vm.page_table_level_index_for_geometry(virt, page_offset_bits, level_count, level_index_bits, entries_per_table, level_count - 1);
-    if vm.read_bootstrap_table_entry_for_geometry(table_page, leaf_index, page_size, entries_per_table, entry_size) != 0 {
+    const leaf_index = vm.page_table_level_index(virt, tables, tables.level_count - 1);
+    if vm.read_bootstrap_table_entry(table_page, leaf_index, tables) != 0 {
         return false;
     }
     const leaf = encode_leaf_for_kind(kind, phys, rights);
-    return vm.write_bootstrap_table_entry_for_geometry(table_page, leaf_index, page_size, entries_per_table, entry_size, leaf.raw);
+    return vm.write_bootstrap_table_entry(table_page, leaf_index, tables, leaf.raw);
 }
 
 pub fn map_bootstrap_page(tables: Spec, virt: usize, phys: usize, rights: u8): bool {
@@ -207,22 +195,18 @@ pub fn map_bootstrap_page(tables: Spec, virt: usize, phys: usize, rights: u8): b
 }
 
 pub fn unmap_bootstrap_page(tables: Spec, virt: usize): bool {
-    return unmap_bootstrap_page_geometry(virt, tables.page_size, tables.page_offset_bits, tables.level_count, tables.level_index_bits, tables.entries_per_table, tables.entry_size);
-}
-
-pub fn unmap_bootstrap_page_geometry(virt: usize, page_size: usize, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, entry_size: usize): bool {
-    if !vm.is_page_aligned(virt, page_size) {
+    if !vm.is_page_aligned(virt, tables.page_size) {
         return false;
     }
-    const table_page = leaf_table_page_for_geometry(page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size, virt, false);
+    const table_page = leaf_table_page_for_virt(tables, virt, false);
     if table_page >= vm.bootstrap_table_page_count() {
         return false;
     }
-    const leaf_index = vm.page_table_level_index_for_geometry(virt, page_offset_bits, level_count, level_index_bits, entries_per_table, level_count - 1);
-    if vm.read_bootstrap_table_entry_for_geometry(table_page, leaf_index, page_size, entries_per_table, entry_size) == 0 {
+    const leaf_index = vm.page_table_level_index(virt, tables, tables.level_count - 1);
+    if vm.read_bootstrap_table_entry(table_page, leaf_index, tables) == 0 {
         return false;
     }
-    return vm.write_bootstrap_table_entry_for_geometry(table_page, leaf_index, page_size, entries_per_table, entry_size, 0);
+    return vm.write_bootstrap_table_entry(table_page, leaf_index, tables, 0);
 }
 
 pub fn populate_bootstrap_tables(tables: Spec): bool {
@@ -242,17 +226,13 @@ pub fn populate_bootstrap_tables(tables: Spec): bool {
 }
 
 pub fn lookup_bootstrap_phys(tables: Spec, virt: usize): usize {
-    return lookup_bootstrap_phys_geometry(virt, tables.page_size, tables.page_offset_bits, tables.level_count, tables.level_index_bits, tables.entries_per_table, tables.entry_size);
-}
-
-pub fn lookup_bootstrap_phys_geometry(virt: usize, page_size: usize, page_offset_bits: usize, level_count: usize, level_index_bits: usize, entries_per_table: usize, entry_size: usize): usize {
-    const table_page = leaf_table_page_for_geometry(page_size, page_offset_bits, level_count, level_index_bits, entries_per_table, entry_size, virt, false);
+    const table_page = leaf_table_page_for_virt(tables, virt, false);
     if table_page >= vm.bootstrap_table_page_count() {
         return 0;
     }
 
-    const leaf_index = vm.page_table_level_index_for_geometry(virt, page_offset_bits, level_count, level_index_bits, entries_per_table, level_count - 1);
-    const raw = vm.read_bootstrap_table_entry_for_geometry(table_page, leaf_index, page_size, entries_per_table, entry_size);
+    const leaf_index = vm.page_table_level_index(virt, tables, tables.level_count - 1);
+    const raw = vm.read_bootstrap_table_entry(table_page, leaf_index, tables);
     if raw == 0 {
         return 0;
     }
