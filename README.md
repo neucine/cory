@@ -73,14 +73,34 @@ FakeSensor -> FakeISP -> Preview -> StorageWriter
 
 The pipeline should run across isolated userspace services, communicate through capability-based IPC, move frame-like data using `SharedBuffer` objects, and report end-to-end latency through the trace system.
 
+## Current progress
+
+Cory currently boots both QEMU targets into kernel selftests:
+
+- AArch64 `virt` starts at EL1, or drops EL2 to EL1 before common kernel entry.
+- RISC-V64 `virt` uses a small M-mode shim and enters the kernel in S-mode.
+- Both targets initialize trap vectors, capture full trap frames, and expose
+  resume-state helpers.
+- Memory bootstrap, bootstrap page tables, physical pages, heap, address-space
+  metadata, kernel object IDs, capabilities, process metadata, thread metadata,
+  and scheduler metadata all have boot-time selftests.
+- Opt-in probes validate deliberate traps, trap-frame restore with `eret`/`sret`,
+  and a trap-driven scheduler handoff on both targets.
+- Timer groundwork exists on both targets; AArch64 also proves masked deadline
+  programming and diagnostic virtual timer IRQ delivery through QEMU `virt`
+  GICv2 INTID 27.
+
+Still intentionally missing: normal timer-driven preemption, a real scheduler
+loop, userspace entry, syscalls, IPC, and shared buffers.
+
 ## Build
 
 ```text
-~/.cyna/0.1.8/bin/cyna version
-~/.cyna/0.1.8/bin/cyna check src/kernel/platform/qemu_aarch64_virt/main.cy
-~/.cyna/0.1.8/bin/cyna build .
-~/.cyna/0.1.8/bin/cyna check src/kernel/platform/qemu_riscv64_virt/main.cy
-~/.cyna/0.1.8/bin/cyna build cyna.riscv64.toml
+cyna version
+cyna check .
+cyna build .
+cyna check cyna.riscv64.toml
+cyna build cyna.riscv64.toml
 ```
 
 Expected outputs:
@@ -95,8 +115,10 @@ build/cory-riscv64.bin
 ```
 
 The current kernel entries write to the QEMU `virt` UART, initialize exception
-or trap vectors, run common bootstrap selftests through memory, VM, address
-spaces, and object/capability contracts, then halt. When QEMU is available, run:
+or trap vectors, verify readable timer counters plus masked AArch64 deadline
+programming, run common bootstrap selftests through memory, VM, address spaces,
+and object/capability contracts, then halt.
+When QEMU is available, run:
 
 ```text
 qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory.elf
@@ -108,6 +130,9 @@ The common check/build/QEMU flows are wrapped by:
 ```text
 tools/check.sh normal
 tools/check.sh traps
+tools/check.sh restore
+tools/check.sh sched
+tools/check.sh timerirq
 tools/check.sh all
 ```
 
@@ -120,12 +145,53 @@ Normal boot must not deliberately panic. Trap diagnostics are tested through
 separate opt-in manifests:
 
 ```text
-~/.cyna/0.1.8/bin/cyna build cyna.traptest.toml
+cyna build cyna.traptest.toml
 qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-traptest.elf
 
-~/.cyna/0.1.8/bin/cyna build cyna.traptest.riscv64.toml
+cyna build cyna.traptest.riscv64.toml
 qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-traptest-riscv64.elf
 ```
 
 These images intentionally execute `brk` on AArch64 or `ebreak` on RISC-V64,
 print captured architecture trap state, then panic.
+
+## Restore diagnostic probes
+
+Restore probes validate the exception-return paths in opt-in images:
+
+```text
+tools/check.sh restore-aarch64
+tools/check.sh restore-riscv64
+```
+
+They trigger `brk` or `ebreak`, advance the saved return PC, restore from the
+trap frame, print a `restoretest: resumed ...` line, then intentionally panic.
+Normal boot and trap diagnostic images still use the panic-only trap path.
+
+## Trap scheduling probe
+
+Scheduler probes validate the first integrated trap scheduling handoff in
+opt-in images:
+
+```text
+tools/check.sh sched-aarch64
+tools/check.sh sched-riscv64
+```
+
+They create a ready kernel thread, trigger `brk` or `ebreak` from the current
+thread, save the interrupted trap frame, schedule the ready thread, write that
+thread's saved resume state into the trap frame, restore with `eret` or `sret`,
+print `schedtest: thread b resumed`, then intentionally panic.
+
+## Timer IRQ probe
+
+The AArch64 timer IRQ probe validates virtual timer delivery through the QEMU
+`virt` GICv2 path:
+
+```text
+tools/check.sh timerirq-aarch64
+```
+
+It configures the virtual timer PPI, unmasks IRQs, receives INTID 27, disarms
+the timer, prints `timerirqtest: received virtual timer irq`, then intentionally
+panics. This is still diagnostic-only; normal boot does not enable timer IRQs.

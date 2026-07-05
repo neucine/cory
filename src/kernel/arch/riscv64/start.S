@@ -27,6 +27,11 @@ _start:
     li t0, 0x222
     csrw mideleg, t0
 
+    # Allow the S-mode kernel to read the architectural time counter. Timer
+    # interrupt programming is still separate future work.
+    li t0, (1 << 1)
+    csrw mcounteren, t0
+
     la t0, cory_riscv64_s_entry
     csrw mepc, t0
 
@@ -65,4 +70,11 @@ cory_riscv64_activate_identity_vm:
 .type cory_riscv64_flush_kernel_tlb, @function
 cory_riscv64_flush_kernel_tlb:
     sfence.vma zero, zero
+    ret
+
+.global cory_riscv64_time_value
+.type cory_riscv64_time_value, @function
+cory_riscv64_time_value:
+    # C ABI: c_ulong cory_riscv64_time_value(void)
+    rdtime a0
     ret

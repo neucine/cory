@@ -379,6 +379,15 @@ pub fn run_thread_tests(kernel_process_id: usize, kernel_thread_id: usize, arch:
         if aarch64_context.owner_thread_id(kernel_context.arch_context_id) != kernel_thread_id {
             fail("selftest: thread kernel aarch64 arch context owner");
         }
+        if aarch64_context.instruction_pointer(kernel_context.arch_context_id) != kernel_context.instruction_pointer {
+            fail("selftest: thread kernel aarch64 arch context ip");
+        }
+        if aarch64_context.stack_pointer(kernel_context.arch_context_id) != kernel_context.stack_pointer {
+            fail("selftest: thread kernel aarch64 arch context sp");
+        }
+        if aarch64_context.status_flags(kernel_context.arch_context_id) != kernel_context.status_flags {
+            fail("selftest: thread kernel aarch64 arch context flags");
+        }
     }
     if arch == page_table.arch_riscv64 {
         if !riscv64_context.is_live(kernel_context.arch_context_id) {
@@ -386,6 +395,15 @@ pub fn run_thread_tests(kernel_process_id: usize, kernel_thread_id: usize, arch:
         }
         if riscv64_context.owner_thread_id(kernel_context.arch_context_id) != kernel_thread_id {
             fail("selftest: thread kernel riscv64 arch context owner");
+        }
+        if riscv64_context.instruction_pointer(kernel_context.arch_context_id) != kernel_context.instruction_pointer {
+            fail("selftest: thread kernel riscv64 arch context ip");
+        }
+        if riscv64_context.stack_pointer(kernel_context.arch_context_id) != kernel_context.stack_pointer {
+            fail("selftest: thread kernel riscv64 arch context sp");
+        }
+        if riscv64_context.status_flags(kernel_context.arch_context_id) != kernel_context.status_flags {
+            fail("selftest: thread kernel riscv64 arch context flags");
         }
     }
 
@@ -500,6 +518,88 @@ pub fn run_scheduler_tests(kernel_process_id: usize, kernel_thread_id: usize): v
     if ready_context.arch_context_id != ready_arch_context {
         fail("selftest: scheduler ready context arch id");
     }
+    if arch == page_table.arch_aarch64 {
+        if aarch64_context.instruction_pointer(ready_arch_context) != ready_context.instruction_pointer {
+            fail("selftest: scheduler aarch64 ready context ip");
+        }
+        if aarch64_context.stack_pointer(ready_arch_context) != ready_context.stack_pointer {
+            fail("selftest: scheduler aarch64 ready context sp");
+        }
+        if aarch64_context.status_flags(ready_arch_context) != ready_context.status_flags {
+            fail("selftest: scheduler aarch64 ready context flags");
+        }
+    }
+    if arch == page_table.arch_riscv64 {
+        if riscv64_context.instruction_pointer(ready_arch_context) != ready_context.instruction_pointer {
+            fail("selftest: scheduler riscv64 ready context ip");
+        }
+        if riscv64_context.stack_pointer(ready_arch_context) != ready_context.stack_pointer {
+            fail("selftest: scheduler riscv64 ready context sp");
+        }
+        if riscv64_context.status_flags(ready_arch_context) != ready_context.status_flags {
+            fail("selftest: scheduler riscv64 ready context flags");
+        }
+    }
+    if !context.save_resume_state(ready_thread, 0x7000, 0x8000, 0x9000) {
+        fail("selftest: scheduler save resume");
+    }
+    const ready_resume = context.get_resume_state(ready_thread);
+    if !ready_resume.valid {
+        fail("selftest: scheduler ready resume valid");
+    }
+    if ready_resume.instruction_pointer != 0x7000 {
+        fail("selftest: scheduler ready resume ip");
+    }
+    if ready_resume.stack_pointer != 0x8000 {
+        fail("selftest: scheduler ready resume sp");
+    }
+    if ready_resume.status_flags != 0x9000 {
+        fail("selftest: scheduler ready resume flags");
+    }
+    const saved_context = context.get(ready_thread);
+    if saved_context.instruction_pointer != 0x7000 {
+        fail("selftest: scheduler saved context ip");
+    }
+    if saved_context.stack_pointer != 0x8000 {
+        fail("selftest: scheduler saved context sp");
+    }
+    if saved_context.status_flags != 0x9000 {
+        fail("selftest: scheduler saved context flags");
+    }
+    if arch == page_table.arch_aarch64 {
+        if aarch64_context.instruction_pointer(ready_arch_context) != saved_context.instruction_pointer {
+            fail("selftest: scheduler aarch64 saved context ip");
+        }
+        if aarch64_context.stack_pointer(ready_arch_context) != saved_context.stack_pointer {
+            fail("selftest: scheduler aarch64 saved context sp");
+        }
+        if aarch64_context.status_flags(ready_arch_context) != saved_context.status_flags {
+            fail("selftest: scheduler aarch64 saved context flags");
+        }
+    }
+    if arch == page_table.arch_riscv64 {
+        if riscv64_context.instruction_pointer(ready_arch_context) != saved_context.instruction_pointer {
+            fail("selftest: scheduler riscv64 saved context ip");
+        }
+        if riscv64_context.stack_pointer(ready_arch_context) != saved_context.stack_pointer {
+            fail("selftest: scheduler riscv64 saved context sp");
+        }
+        if riscv64_context.status_flags(ready_arch_context) != saved_context.status_flags {
+            fail("selftest: scheduler riscv64 saved context flags");
+        }
+    }
+    if context.save_resume_state(thread.invalid_id, 1, 2, 3) {
+        fail("selftest: scheduler save invalid thread");
+    }
+    if context.status() != ContextStatus.invalid_thread {
+        fail("selftest: scheduler save invalid thread status");
+    }
+    if context.get_resume_state(thread.invalid_id).valid {
+        fail("selftest: scheduler invalid resume state");
+    }
+    if context.status() != ContextStatus.invalid_thread {
+        fail("selftest: scheduler invalid resume state status");
+    }
     const duplicate_arch_context = allocate_arch_context(arch, ready_thread);
     if duplicate_arch_context == context.invalid_arch_context {
         fail("selftest: scheduler duplicate arch context allocate");
@@ -529,12 +629,25 @@ pub fn run_scheduler_tests(kernel_process_id: usize, kernel_thread_id: usize): v
         fail("selftest: scheduler duplicate status");
     }
 
-    const scheduled = scheduler.schedule_next();
+    const scheduled = scheduler.schedule_next_saving_current(0xa000, 0xb000, 0xc000);
     if scheduled != ready_thread {
         fail("selftest: scheduler schedule ready");
     }
     if scheduler.current() != ready_thread {
         fail("selftest: scheduler schedule current");
+    }
+    const selected_resume = context.get_resume_state(scheduled);
+    if !selected_resume.valid {
+        fail("selftest: scheduler selected resume valid");
+    }
+    if selected_resume.instruction_pointer != 0x7000 {
+        fail("selftest: scheduler selected resume ip");
+    }
+    if selected_resume.stack_pointer != 0x8000 {
+        fail("selftest: scheduler selected resume sp");
+    }
+    if selected_resume.status_flags != 0x9000 {
+        fail("selftest: scheduler selected resume flags");
     }
     if thread.get(ready_thread).state != ThreadState.running {
         fail("selftest: scheduler schedule ready running");
@@ -547,6 +660,38 @@ pub fn run_scheduler_tests(kernel_process_id: usize, kernel_thread_id: usize): v
     }
     if scheduler.peek() != kernel_thread_id {
         fail("selftest: scheduler schedule previous queued");
+    }
+    const saved_kernel_context = context.get(kernel_thread_id);
+    if saved_kernel_context.instruction_pointer != 0xa000 {
+        fail("selftest: scheduler saved previous ip");
+    }
+    if saved_kernel_context.stack_pointer != 0xb000 {
+        fail("selftest: scheduler saved previous sp");
+    }
+    if saved_kernel_context.status_flags != 0xc000 {
+        fail("selftest: scheduler saved previous flags");
+    }
+    if arch == page_table.arch_aarch64 {
+        if aarch64_context.instruction_pointer(saved_kernel_context.arch_context_id) != saved_kernel_context.instruction_pointer {
+            fail("selftest: scheduler aarch64 saved previous ip");
+        }
+        if aarch64_context.stack_pointer(saved_kernel_context.arch_context_id) != saved_kernel_context.stack_pointer {
+            fail("selftest: scheduler aarch64 saved previous sp");
+        }
+        if aarch64_context.status_flags(saved_kernel_context.arch_context_id) != saved_kernel_context.status_flags {
+            fail("selftest: scheduler aarch64 saved previous flags");
+        }
+    }
+    if arch == page_table.arch_riscv64 {
+        if riscv64_context.instruction_pointer(saved_kernel_context.arch_context_id) != saved_kernel_context.instruction_pointer {
+            fail("selftest: scheduler riscv64 saved previous ip");
+        }
+        if riscv64_context.stack_pointer(saved_kernel_context.arch_context_id) != saved_kernel_context.stack_pointer {
+            fail("selftest: scheduler riscv64 saved previous sp");
+        }
+        if riscv64_context.status_flags(saved_kernel_context.arch_context_id) != saved_kernel_context.status_flags {
+            fail("selftest: scheduler riscv64 saved previous flags");
+        }
     }
     const scheduled_back = scheduler.schedule_next();
     if scheduled_back != kernel_thread_id {
@@ -587,6 +732,12 @@ pub fn run_scheduler_tests(kernel_process_id: usize, kernel_thread_id: usize): v
     if scheduler.status() != SchedulerStatus.not_ready {
         fail("selftest: scheduler enqueue blocked status");
     }
+    if scheduler.schedule_next_saving_current(1, 2, 3) != thread.invalid_id {
+        fail("selftest: scheduler save blocked current");
+    }
+    if scheduler.status() != SchedulerStatus.not_ready {
+        fail("selftest: scheduler save blocked current status");
+    }
     if !thread.mark_dead(dequeued) {
         fail("selftest: scheduler mark dead");
     }
@@ -622,6 +773,18 @@ pub fn run_scheduler_tests(kernel_process_id: usize, kernel_thread_id: usize): v
     }
     if context.status() != ContextStatus.invalid_arch {
         fail("selftest: scheduler invalid arch context status");
+    }
+    if context.save_resume_state(invalid_arch_thread, 1, 2, 3) {
+        fail("selftest: scheduler save missing context");
+    }
+    if context.status() != ContextStatus.missing_context {
+        fail("selftest: scheduler save missing context status");
+    }
+    if context.get_resume_state(invalid_arch_thread).valid {
+        fail("selftest: scheduler missing resume state");
+    }
+    if context.status() != ContextStatus.missing_context {
+        fail("selftest: scheduler missing resume state status");
     }
     const invalid_arch_context_thread = thread.create_kernel_ready(kernel_process_id, process.get(kernel_process_id).capability_slot);
     if invalid_arch_context_thread == thread.invalid_id {

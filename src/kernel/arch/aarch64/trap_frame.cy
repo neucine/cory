@@ -129,6 +129,32 @@ pub fn diagnostic_from_frame(frame: *TrapFrame): ExceptionDiagnosticFrame {
     }
 }
 
+pub fn instruction_pointer_from_frame(frame: *TrapFrame): usize {
+    unchecked {
+        return (*frame).elr_el1 as usize;
+    }
+}
+
+pub fn stack_pointer_from_frame(frame: *TrapFrame): usize {
+    unchecked {
+        return (*frame).sp as usize;
+    }
+}
+
+pub fn status_flags_from_frame(frame: *TrapFrame): usize {
+    unchecked {
+        return (*frame).spsr_el1 as usize;
+    }
+}
+
+pub fn set_resume_state_in_frame(frame: *TrapFrame, instruction_pointer: usize, stack_pointer: usize, status_flags: usize): void {
+    unchecked {
+        (*frame).elr_el1 = instruction_pointer as c_ulong;
+        (*frame).sp = stack_pointer as c_ulong;
+        (*frame).spsr_el1 = status_flags as c_ulong;
+    }
+}
+
 pub fn verify_layout(): bool {
     if trap_frame_size != 288 {
         return false;

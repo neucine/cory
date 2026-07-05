@@ -267,6 +267,33 @@ fn check_arch_context_descriptors(active_arch: i32): void {
     if aarch64_context.owner_thread_id(aarch64_context_id) != 11 {
         fail("selftest: aarch64 context owner");
     }
+    if aarch64_context.instruction_pointer(aarch64_context_id) != 0 {
+        fail("selftest: aarch64 context initial ip");
+    }
+    if aarch64_context.stack_pointer(aarch64_context_id) != 0 {
+        fail("selftest: aarch64 context initial sp");
+    }
+    if aarch64_context.status_flags(aarch64_context_id) != 0 {
+        fail("selftest: aarch64 context initial flags");
+    }
+    if !aarch64_context.set_resume_state(aarch64_context_id, 0x1100, 0x2200, 0x3300) {
+        fail("selftest: aarch64 context set resume");
+    }
+    if aarch64_context.instruction_pointer(aarch64_context_id) != 0x1100 {
+        fail("selftest: aarch64 context ip");
+    }
+    if aarch64_context.stack_pointer(aarch64_context_id) != 0x2200 {
+        fail("selftest: aarch64 context sp");
+    }
+    if aarch64_context.status_flags(aarch64_context_id) != 0x3300 {
+        fail("selftest: aarch64 context flags");
+    }
+    if aarch64_context.set_resume_state(aarch64_context.invalid_context, 1, 2, 3) {
+        fail("selftest: aarch64 context invalid set resume");
+    }
+    if aarch64_context.status() != aarch64_context.status_invalid_context {
+        fail("selftest: aarch64 context invalid set status");
+    }
     if aarch64_context.owner_thread_id(aarch64_context.invalid_context) != 0 {
         fail("selftest: aarch64 context invalid owner");
     }
@@ -282,6 +309,33 @@ fn check_arch_context_descriptors(active_arch: i32): void {
     }
     if riscv64_context.owner_thread_id(riscv64_context_id) != 12 {
         fail("selftest: riscv64 context owner");
+    }
+    if riscv64_context.instruction_pointer(riscv64_context_id) != 0 {
+        fail("selftest: riscv64 context initial ip");
+    }
+    if riscv64_context.stack_pointer(riscv64_context_id) != 0 {
+        fail("selftest: riscv64 context initial sp");
+    }
+    if riscv64_context.status_flags(riscv64_context_id) != 0 {
+        fail("selftest: riscv64 context initial flags");
+    }
+    if !riscv64_context.set_resume_state(riscv64_context_id, 0x4400, 0x5500, 0x6600) {
+        fail("selftest: riscv64 context set resume");
+    }
+    if riscv64_context.instruction_pointer(riscv64_context_id) != 0x4400 {
+        fail("selftest: riscv64 context ip");
+    }
+    if riscv64_context.stack_pointer(riscv64_context_id) != 0x5500 {
+        fail("selftest: riscv64 context sp");
+    }
+    if riscv64_context.status_flags(riscv64_context_id) != 0x6600 {
+        fail("selftest: riscv64 context flags");
+    }
+    if riscv64_context.set_resume_state(riscv64_context.invalid_context, 1, 2, 3) {
+        fail("selftest: riscv64 context invalid set resume");
+    }
+    if riscv64_context.status() != riscv64_context.status_invalid_context {
+        fail("selftest: riscv64 context invalid set status");
     }
     if riscv64_context.owner_thread_id(riscv64_context.invalid_context) != 0 {
         fail("selftest: riscv64 context invalid owner");

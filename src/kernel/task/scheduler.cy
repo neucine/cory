@@ -1,7 +1,9 @@
+import .kernel.task.context;
 import .kernel.task.thread;
 import { ThreadState } from .kernel.task.thread;
 
 pub const max_run_queue: usize = 16;
+pub const invalid_thread: usize = thread.invalid_id;
 
 pub enum SchedulerStatus: i32 {
     ok = 0,
@@ -10,6 +12,7 @@ pub enum SchedulerStatus: i32 {
     invalid_thread,
     not_ready,
     duplicate,
+    context_save_failed,
 }
 
 var run_queue: [16]usize = [0] ** 16;
@@ -135,6 +138,24 @@ pub fn schedule_next(): usize {
     }
     last_status = SchedulerStatus.ok;
     return next;
+}
+
+pub fn schedule_next_saving_current(instruction_pointer: usize, stack_pointer: usize, status_flags: usize): usize {
+    const previous = current_thread;
+    const previous_entry = thread.get(previous);
+    if previous_entry.id == thread.invalid_id {
+        last_status = SchedulerStatus.invalid_thread;
+        return thread.invalid_id;
+    }
+    if previous_entry.state != ThreadState.running {
+        last_status = SchedulerStatus.not_ready;
+        return thread.invalid_id;
+    }
+    if !context.save_resume_state(previous, instruction_pointer, stack_pointer, status_flags) {
+        last_status = SchedulerStatus.context_save_failed;
+        return thread.invalid_id;
+    }
+    return schedule_next();
 }
 
 pub fn count(): usize {

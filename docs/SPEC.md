@@ -253,8 +253,10 @@ Current privilege-mode scope:
   vector setup.
 - RISC-V64 configures one permissive PMP range, delegates the currently needed
   synchronous exceptions and supervisor interrupts, and enters S-mode.
-- Timer ownership, interrupt-controller setup, SBI integration, user-mode
-  entry, and trap return are not implemented yet.
+- Timer counter access exists on both QEMU targets. AArch64 also has masked
+  virtual deadline programming plus opt-in GICv2 virtual timer IRQ delivery.
+- RISC-V timer interrupt-controller setup, SBI integration, user-mode entry,
+  and normal trap-return dispatch are not implemented yet.
 
 This model matters for portability: if a platform starts at a different
 privilege level, the platform or architecture entry code must adapt before Cyna
@@ -294,8 +296,9 @@ Current implementation status:
   the architecture `trap_frame.cy` module.
 - Cyna receives a pointer to the saved frame and derives the current diagnostic
   output from that frame.
-- Trap return, register restore, syscall dispatch, page-fault recovery, and
-  user-mode return are not implemented yet.
+- Opt-in restore probes validate register restore and trap return on both
+  targets. Syscall dispatch, page-fault recovery, normal trap-return dispatch,
+  and user-mode return are not implemented yet.
 
 Cyna pressure point:
 
@@ -963,12 +966,52 @@ Current status:
 - Kernel thread metadata exists, is created through process-local authority,
   and installs a thread handle into the owning process capability space.
 - A fixed scheduler run queue and round-robin scheduler decision primitive exist
-  for ready-thread metadata; no context switching is implemented yet.
-- Portable thread context metadata exists and stores architecture-owned context
-  descriptor handles; real saved-register state and switching are not
+  for ready-thread metadata; normal timer-driven context switching is not
   implemented yet.
+- Portable thread context metadata exists and stores architecture-owned context
+  handles. Architecture context records now carry initial resume-state storage
+  for instruction pointer, stack pointer, and status flags; the normal
+  timer-driven switching path is not implemented yet.
 - Architecture context descriptors are importable by common cross-arch tests
   without pulling in target-specific assembler exports.
+- Target-specific trap-frame helpers expose resume-state fields from real
+  exception/trap frames and are validated by the opt-in trap probes.
+- Portable thread context save updates both common context metadata and the
+  architecture-owned resume-state record. Target-specific trap-context wrappers
+  can save resume state directly from real trap frames.
+- Scheduler has a save-aware handoff primitive that records the outgoing
+  running thread's resume state before selecting the next ready thread; actual
+  architecture restore/switch assembly is still future work.
+- Target-specific trap-context wrappers can drive that save-aware scheduler
+  handoff from an architecture trap frame without exposing trap-frame layout to
+  common scheduler code.
+- Portable resume-state reads expose the selected thread's saved instruction
+  pointer, stack pointer, and status flags for the future restore path.
+- Target-specific trap-frame writers can copy a selected thread's resume state
+  back into an architecture trap frame.
+- Target restore-return assembly entry points exist for AArch64 `eret` and
+  RISC-V64 `sret`, behind target-local trap-context wrappers. They are validated
+  by opt-in probes but are not wired into normal trap handling yet.
+- Opt-in restore probes validate the AArch64 `eret` and RISC-V64 `sret` paths by
+  resuming after deliberate traps, then panicking intentionally.
+- Opt-in scheduler probes validate the first integrated trap scheduling handoff
+  on both AArch64 and RISC-V64: save interrupted frame, select a ready kernel
+  thread, write selected resume state, restore with `eret` or `sret`, then
+  panic intentionally.
+- Target-local trap-context modules expose a reusable schedule-and-restore path
+  for future timer/interrupt handlers; normal trap handlers remain panic-only.
+- The reusable trap scheduling path records target-local failure status for
+  schedule failure and missing resume state.
+- Platform timer groundwork exists for both QEMU targets: AArch64 reads
+  `cntfrq_el0`/`cntvct_el0` and programs masked virtual timer deadlines through
+  `cntv_tval_el0`/`cntv_ctl_el0`, RISC-V64 grants S-mode `time` access through
+  `mcounteren`, and normal boot checks prove the counters are readable.
+- An opt-in AArch64 timer IRQ probe configures the QEMU `virt` GICv2 virtual
+  timer PPI, unmasks IRQs, receives INTID 27, disarms the timer, and panics
+  intentionally. Normal boot still leaves timer IRQs disabled.
+- Current next kernel slice: connect AArch64 timer IRQ delivery to the existing
+  target-local schedule-and-restore path in an opt-in image, then graduate only
+  the boring pieces into normal boot.
 - Cyna gaps identified by kernel slotmap work were reproduced and fixed
   upstream: mutable references to module globals work for this path, and
   freestanding aggregate lowering has memory helper support.
@@ -1020,7 +1063,7 @@ Still incomplete:
 
 - AArch64 EL3 entry path and fuller EL2 policy
 - fuller RISC-V trap/interrupt delegation policy
-- trap-frame restore for recoverable kernel and user traps
+- normal-handler integration for recoverable kernel traps and future user traps
 
 ### Phase 2 — Privilege-Mode Ownership
 
@@ -1168,12 +1211,18 @@ Deliverables:
 - kernel process metadata: initial fixed table with slotmap process IDs done
 - thread object: initial metadata-only table done
 - portable thread context metadata: initial table done
-- architecture-owned context descriptor storage: initial fixed tables done
+- architecture-owned context storage: initial fixed tables and resume-state
+  fields done
 - scheduler run queue: initial fixed queue done
 - scheduler decision primitive: round-robin metadata transition done
-- context switch
+- scheduler save-aware handoff primitive: done
+- opt-in trap-frame restore probes: done for AArch64 and RISC-V64
+- opt-in trap-driven scheduler handoff probes: done for AArch64 and RISC-V64
+- timer interrupt: AArch64 diagnostic delivery done; scheduler integration not
+  done
+- context switch: diagnostic trap-frame restore exists; normal scheduling path
+  not done
 - scheduler loop
-- timer interrupt
 - sleep/wakeup
 - basic priority
 - thread exit

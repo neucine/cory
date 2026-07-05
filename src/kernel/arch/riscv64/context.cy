@@ -13,12 +13,18 @@ pub const status_invalid_context: i32 = 2;
 pub struct ArchContext {
     pub id: usize;
     pub owner_thread_id: usize;
+    pub instruction_pointer: usize;
+    pub stack_pointer: usize;
+    pub status_flags: usize;
 }
 
 var contexts: StaticSlotMap<[16]ArchContext> = StaticSlotMap<[16]ArchContext> {
     values: [ArchContext {
         id: invalid_context,
         owner_thread_id: 0,
+        instruction_pointer: 0,
+        stack_pointer: 0,
+        status_flags: 0,
     }] ** 16,
     live: [false] ** 16,
     generations: [0] ** 16,
@@ -31,6 +37,9 @@ fn empty_context(): ArchContext {
     return ArchContext {
         id: invalid_context,
         owner_thread_id: 0,
+        instruction_pointer: 0,
+        stack_pointer: 0,
+        status_flags: 0,
     };
 }
 
@@ -66,6 +75,9 @@ pub fn allocate(owner_thread_id: usize): usize {
     contexts.values[contexts.index(id)] = ArchContext {
         id: id,
         owner_thread_id: owner_thread_id,
+        instruction_pointer: 0,
+        stack_pointer: 0,
+        status_flags: 0,
     };
     last_status = status_ok;
     return id;
@@ -87,6 +99,44 @@ pub fn owner_thread_id(id: usize): usize {
     }
     last_status = status_ok;
     return contexts.values[contexts.index(id)].owner_thread_id;
+}
+
+pub fn set_resume_state(id: usize, instruction_pointer: usize, stack_pointer: usize, status_flags: usize): bool {
+    if !is_live(id) {
+        return false;
+    }
+    const index = contexts.index(id);
+    var entry = contexts.values[index];
+    entry.instruction_pointer = instruction_pointer;
+    entry.stack_pointer = stack_pointer;
+    entry.status_flags = status_flags;
+    contexts.values[index] = entry;
+    last_status = status_ok;
+    return true;
+}
+
+pub fn instruction_pointer(id: usize): usize {
+    if !is_live(id) {
+        return 0;
+    }
+    last_status = status_ok;
+    return contexts.values[contexts.index(id)].instruction_pointer;
+}
+
+pub fn stack_pointer(id: usize): usize {
+    if !is_live(id) {
+        return 0;
+    }
+    last_status = status_ok;
+    return contexts.values[contexts.index(id)].stack_pointer;
+}
+
+pub fn status_flags(id: usize): usize {
+    if !is_live(id) {
+        return 0;
+    }
+    last_status = status_ok;
+    return contexts.values[contexts.index(id)].status_flags;
 }
 
 pub fn count(): usize {

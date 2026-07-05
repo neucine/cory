@@ -63,6 +63,37 @@ cory_arch_exception_vector_entry:
     wfe
     b 1b
 
+.global cory_arch_exception_restore_from_frame
+.type cory_arch_exception_restore_from_frame, %function
+cory_arch_exception_restore_from_frame:
+    // C ABI: noreturn void cory_arch_exception_restore_from_frame(TrapFrame *frame)
+    // Restores the saved exception return state and resumes with eret. This is
+    // intentionally not wired into the panic-only vector path yet.
+    mov x18, x0
+    ldr x17, [x18, #TF_ELR_EL1]
+    msr elr_el1, x17
+    ldr x17, [x18, #TF_SPSR_EL1]
+    msr spsr_el1, x17
+    ldr x17, [x18, #TF_SP]
+    mov sp, x17
+    ldp x0, x1, [x18, #TF_X0]
+    ldp x2, x3, [x18, #TF_X2]
+    ldp x4, x5, [x18, #TF_X4]
+    ldp x6, x7, [x18, #TF_X6]
+    ldp x8, x9, [x18, #TF_X8]
+    ldp x10, x11, [x18, #TF_X10]
+    ldp x12, x13, [x18, #TF_X12]
+    ldp x14, x15, [x18, #TF_X14]
+    ldp x16, x17, [x18, #TF_X16]
+    ldp x20, x21, [x18, #TF_X20]
+    ldp x22, x23, [x18, #TF_X22]
+    ldp x24, x25, [x18, #TF_X24]
+    ldp x26, x27, [x18, #TF_X26]
+    ldp x28, x29, [x18, #TF_X28]
+    ldr x30, [x18, #TF_X30]
+    ldp x18, x19, [x18, #TF_X18]
+    eret
+
 .global cory_arch_exception_init
 .type cory_arch_exception_init, %function
 cory_arch_exception_init:

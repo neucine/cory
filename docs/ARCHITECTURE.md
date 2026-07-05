@@ -7,11 +7,13 @@ design record remains in `docs/SPEC.md`.
 
 ```text
 platform/<board>/main.cy
-    owns board entry glue, UART setup, platform memory layout, and MMU register activation
+    owns board entry glue, UART setup, platform memory layout, timer/GIC glue,
+    and MMU register activation
 
 arch/<cpu>/
     owns privilege-mode normalization, traps/exceptions, page-table encoding,
-    CPU registers, and architecture context storage descriptors
+    CPU registers, IRQ masking, timer register access, and architecture context
+    storage descriptors
 
 bootstrap.cy
     owns common kernel bring-up order after platform logging is alive
@@ -95,6 +97,7 @@ arch start assembly
         -> zero BSS
         -> initialize UART console
         -> initialize trap/exception vectors
+        -> verify platform timer counter/deadline support
         -> bootstrap.prepare_memory(...)
             -> initialize boot allocator
             -> initialize physical pages
@@ -123,13 +126,37 @@ space. User-shaped address spaces currently appear only as unrooted policy
 fixtures in selftests; real userspace address spaces arrive with process and
 loader work.
 
+## Current Progress
+
+The implementation is through the first recoverable-trap and timer-interrupt
+proofs, but not yet through normal preemption:
+
+- Both QEMU targets boot, initialize vectors, activate bootstrap identity
+  mappings, and run memory/object/task/arch selftests.
+- Trap-frame layout is owned by target `cstruct` definitions and verified at
+  boot before vectors are installed.
+- AArch64 and RISC-V64 opt-in restore probes resume from deliberate traps using
+  `eret` and `sret`.
+- AArch64 and RISC-V64 opt-in scheduler probes save an interrupted trap frame,
+  select a ready thread, write selected resume state, and restore into that
+  thread.
+- AArch64 normal boot proves readable counters and masked virtual timer
+  deadline programming. RISC-V64 normal boot proves S-mode `time` readability.
+- The AArch64 timer IRQ probe configures QEMU `virt` GICv2, receives virtual
+  timer INTID 27, disarms the timer, and EOIs the interrupt.
+
+The important boundary: timer IRQ delivery is diagnostic-only. Normal boot does
+not yet enable timer interrupts, and the scheduler is not yet driven by a timer.
+
 ## Subsystem Direction
 
 Near-term work should make existing layers easier to reason about before moving
 up to scheduler/userspace:
 
-- connect architecture context descriptors to real trap-frame save/restore
-- keep scheduler decisions metadata-only until trap/timer save-restore exists
+- connect the AArch64 timer IRQ probe to the target-local schedule-and-restore
+  path in an opt-in image
+- keep normal boot panic-only until interrupt scheduling is boring in probes
+- add the matching RISC-V timer interrupt path after the AArch64 path is stable
 - keep QEMU AArch64 and RISC-V64 boot checks green after every slice
 
 The first userspace and IPC work should wait until object identity and

@@ -101,3 +101,57 @@ cory_aarch64_flush_kernel_tlb:
     dsb ish
     isb
     ret
+
+.global cory_aarch64_counter_frequency
+.type cory_aarch64_counter_frequency, %function
+cory_aarch64_counter_frequency:
+    // C ABI: c_ulong cory_aarch64_counter_frequency(void)
+    mrs x0, cntfrq_el0
+    ret
+
+.global cory_aarch64_counter_value
+.type cory_aarch64_counter_value, %function
+cory_aarch64_counter_value:
+    // C ABI: c_ulong cory_aarch64_counter_value(void)
+    isb
+    mrs x0, cntvct_el0
+    ret
+
+.global cory_aarch64_timer_tval_write
+.type cory_aarch64_timer_tval_write, %function
+cory_aarch64_timer_tval_write:
+    // C ABI: void cory_aarch64_timer_tval_write(c_ulong ticks)
+    msr cntv_tval_el0, x0
+    isb
+    ret
+
+.global cory_aarch64_timer_ctl_read
+.type cory_aarch64_timer_ctl_read, %function
+cory_aarch64_timer_ctl_read:
+    // C ABI: c_ulong cory_aarch64_timer_ctl_read(void)
+    mrs x0, cntv_ctl_el0
+    ret
+
+.global cory_aarch64_timer_ctl_write
+.type cory_aarch64_timer_ctl_write, %function
+cory_aarch64_timer_ctl_write:
+    // C ABI: void cory_aarch64_timer_ctl_write(c_ulong value)
+    msr cntv_ctl_el0, x0
+    isb
+    ret
+
+.global cory_aarch64_irq_mask
+.type cory_aarch64_irq_mask, %function
+cory_aarch64_irq_mask:
+    // C ABI: void cory_aarch64_irq_mask(void)
+    msr daifset, #2
+    isb
+    ret
+
+.global cory_aarch64_irq_unmask
+.type cory_aarch64_irq_unmask, %function
+cory_aarch64_irq_unmask:
+    // C ABI: void cory_aarch64_irq_unmask(void)
+    msr daifclr, #2
+    isb
+    ret

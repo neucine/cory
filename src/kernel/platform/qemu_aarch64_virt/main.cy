@@ -1,14 +1,17 @@
 import .kernel.entry;
 import .kernel.arch.aarch64.page_table;
+import .kernel.arch.aarch64.trap_context;
 import .kernel.bootstrap;
 import .kernel.kernel;
 import .kernel.platform.qemu_aarch64_virt.console;
 import .kernel.platform.qemu_aarch64_virt.exception;
 import .kernel.platform.qemu_aarch64_virt.memory;
+import .kernel.platform.qemu_aarch64_virt.timer;
 import .kernel.platform.qemu_aarch64_virt.vm_activation;
 import .kernel.memory.map as memory_map;
 import .kernel.memory.phys;
 import .kernel.memory.vm;
+import .kernel.panic as panic_mod;
 
 extern c("cory_aarch64_flush_kernel_tlb") fn flush_kernel_tlb(): void;
 
@@ -32,6 +35,16 @@ export c("cory_kernel_entry") fn cory_kernel_entry(): void {
     console.init();
     kernel.print_entry();
     exception.init();
+    if !timer.readable() {
+        println("timer: counter unavailable");
+        panic_mod.panic();
+    }
+    println("timer: counter ready");
+    if !timer.deadline_programmable() {
+        println("timer: deadline unavailable");
+        panic_mod.panic();
+    }
+    println("timer: deadline ready");
     const map = memory.layout();
     bootstrap.prepare_memory(map, page_table.spec(), page_table.arch_id);
     vm_activation.activate_identity_vm(vm.bootstrap_plan(map, page_table.spec()).page_table_root);
