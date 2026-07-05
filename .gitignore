@@ -9,6 +9,7 @@
 *.log
 *.trace
 *.dump
+.cory-*.toml
 
 # Tool caches
 /.cache/

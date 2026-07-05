@@ -52,6 +52,55 @@ run_qemu_expect() {
   rm -f "$output"
 }
 
+generate_probe_manifest() {
+  label="$1"
+  base_manifest="$2"
+  test_name="$3"
+  test_entry="$4"
+  extra_asm="$5"
+  output=".cory-${label}-$$.toml"
+
+  awk -v test_name="$test_name" -v test_entry="$test_entry" -v extra_asm="$extra_asm" '
+    /^name = / {
+      print "name = \"" test_name "\""
+      next
+    }
+    /^entry = / {
+      print "entry = \"" test_entry "\""
+      next
+    }
+    /^sources = / && extra_asm != "" {
+      sub(/\][[:space:]]*$/, ", \"" extra_asm "\"]")
+      print
+      next
+    }
+    {
+      print
+    }
+  ' "$base_manifest" > "$output"
+  printf '%s\n' "$output"
+}
+
+run_probe() {
+  label="$1"
+  base_manifest="$2"
+  test_name="$3"
+  test_entry="$4"
+  extra_asm="$5"
+  expected_1="$6"
+  expected_2="$7"
+  shift 7
+
+  manifest="$(generate_probe_manifest "$label" "$base_manifest" "$test_name" "$test_entry" "$extra_asm")"
+  if "$CYNA" check "$manifest" && "$CYNA" build "$manifest" && run_qemu_expect "$label" "$expected_1" "$expected_2" "$@"; then
+    rm -f "$manifest"
+    return 0
+  fi
+  status="$?"
+  rm -f "$manifest"
+  return "$status"
+}
+
 run_aarch64() {
   "$CYNA" check .
   "$CYNA" build .
@@ -65,45 +114,31 @@ run_riscv64() {
 }
 
 run_trap_aarch64() {
-  "$CYNA" check cyna.traptest.toml
-  "$CYNA" build cyna.traptest.toml
-  run_qemu_expect trap-aarch64 "traptest: trigger aarch64" "exception: unhandled aarch64" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-traptest.elf
+  run_probe trap-aarch64 cyna.toml cory-traptest src/kernel/platform/qemu_aarch64_virt/trap.test.cy "" "traptest: trigger aarch64" "exception: unhandled aarch64" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-traptest.elf
 }
 
 run_trap_riscv64() {
-  "$CYNA" check cyna.traptest.riscv64.toml
-  "$CYNA" build cyna.traptest.riscv64.toml
-  run_qemu_expect trap-riscv64 "traptest: trigger riscv64" "exception: unhandled riscv64" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-traptest-riscv64.elf
+  run_probe trap-riscv64 cyna.riscv64.toml cory-traptest-riscv64 src/kernel/platform/qemu_riscv64_virt/trap.test.cy "" "traptest: trigger riscv64" "exception: unhandled riscv64" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-traptest-riscv64.elf
 }
 
 run_restore_aarch64() {
-  "$CYNA" check cyna.restoretest.toml
-  "$CYNA" build cyna.restoretest.toml
-  run_qemu_expect restore-aarch64 "restoretest: resumed aarch64" "panic" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-restoretest.elf
+  run_probe restore-aarch64 cyna.toml cory-restoretest src/kernel/platform/qemu_aarch64_virt/restore.test.cy "" "restoretest: resumed aarch64" "panic" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-restoretest.elf
 }
 
 run_restore_riscv64() {
-  "$CYNA" check cyna.restoretest.riscv64.toml
-  "$CYNA" build cyna.restoretest.riscv64.toml
-  run_qemu_expect restore-riscv64 "restoretest: resumed riscv64" "panic" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-restoretest-riscv64.elf
+  run_probe restore-riscv64 cyna.riscv64.toml cory-restoretest-riscv64 src/kernel/platform/qemu_riscv64_virt/restore.test.cy "" "restoretest: resumed riscv64" "panic" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-restoretest-riscv64.elf
 }
 
 run_sched_aarch64() {
-  "$CYNA" check cyna.schedtest.toml
-  "$CYNA" build cyna.schedtest.toml
-  run_qemu_expect sched-aarch64 "schedtest: selected thread b" "schedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-schedtest.elf
+  run_probe sched-aarch64 cyna.toml cory-schedtest src/kernel/platform/qemu_aarch64_virt/sched.test.cy src/kernel/platform/qemu_aarch64_virt/schedtest.S "schedtest: selected thread b" "schedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-schedtest.elf
 }
 
 run_sched_riscv64() {
-  "$CYNA" check cyna.schedtest.riscv64.toml
-  "$CYNA" build cyna.schedtest.riscv64.toml
-  run_qemu_expect sched-riscv64 "schedtest: selected thread b" "schedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-schedtest-riscv64.elf
+  run_probe sched-riscv64 cyna.riscv64.toml cory-schedtest-riscv64 src/kernel/platform/qemu_riscv64_virt/sched.test.cy src/kernel/platform/qemu_riscv64_virt/schedtest.S "schedtest: selected thread b" "schedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-schedtest-riscv64.elf
 }
 
 run_timerirq_aarch64() {
-  "$CYNA" check cyna.timerirqtest.toml
-  "$CYNA" build cyna.timerirqtest.toml
-  run_qemu_expect timerirq-aarch64 "timerirqtest: waiting for virtual timer irq" "timerirqtest: received virtual timer irq" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-timerirqtest.elf
+  run_probe timerirq-aarch64 cyna.toml cory-timerirqtest src/kernel/platform/qemu_aarch64_virt/timerirq.test.cy "" "timerirqtest: waiting for virtual timer irq" "timerirqtest: received virtual timer irq" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-timerirqtest.elf
 }
 
 run_normal() {

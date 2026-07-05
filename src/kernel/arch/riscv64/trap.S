@@ -117,6 +117,6 @@ cory_arch_abi_probe_value:
 .type cory_arch_trigger_test_trap, @function
 cory_arch_trigger_test_trap:
     # C ABI: void cory_arch_trigger_test_trap(void)
-    # Opt-in trap-test entry point. Normal boot manifests do not call it.
+    # Opt-in trap-test entry point. Normal boot entries do not call it.
     ebreak
     ret

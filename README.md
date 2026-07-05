@@ -142,14 +142,12 @@ binary.
 ## Trap diagnostic probes
 
 Normal boot must not deliberately panic. Trap diagnostics are tested through
-separate opt-in manifests:
+separate opt-in probe images. `tools/check.sh` generates their temporary Cyna
+manifests from the target manifests:
 
 ```text
-cyna build cyna.traptest.toml
-qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-traptest.elf
-
-cyna build cyna.traptest.riscv64.toml
-qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-traptest-riscv64.elf
+tools/check.sh trap-aarch64
+tools/check.sh trap-riscv64
 ```
 
 These images intentionally execute `brk` on AArch64 or `ebreak` on RISC-V64,
