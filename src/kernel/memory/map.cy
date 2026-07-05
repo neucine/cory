@@ -29,16 +29,19 @@ pub const max_regions: usize = 16;
 const max_owned_regions: usize = 10;
 
 // The early map is a small fixed table so kernel boot has deterministic
-// storage and does not depend on heap allocation. The parallel arrays keep the
-// representation simple until Cyna has enum arrays and richer aggregate tools.
-var region_starts: [16]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-var region_ends: [16]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-var region_kinds: [16]i32 = [kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram];
+// storage and does not depend on heap allocation.
+var regions: [16]Region = [Region {
+    start: 0,
+    end: 0,
+    kind: kind_free_ram,
+}] ** 16;
 var used_regions: usize = 0;
 
-var owned_starts: [10]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-var owned_ends: [10]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-var owned_kinds: [10]i32 = [kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram, kind_free_ram];
+var owned_regions: [10]Region = [Region {
+    start: 0,
+    end: 0,
+    kind: kind_free_ram,
+}] ** 10;
 var used_owned_regions: usize = 0;
 
 var bootstrap_page_table_start: usize = 0;
@@ -58,9 +61,11 @@ fn reset(): void {
 }
 
 fn write_region(index: usize, start: usize, end: usize, kind: i32): void {
-    region_starts[index] = start;
-    region_ends[index] = end;
-    region_kinds[index] = kind;
+    regions[index] = Region {
+        start: start,
+        end: end,
+        kind: kind,
+    };
 }
 
 fn add_region(start: usize, end: usize, kind: i32): bool {
@@ -77,9 +82,11 @@ fn add_region(start: usize, end: usize, kind: i32): bool {
 }
 
 fn write_owned_region(index: usize, start: usize, end: usize, kind: i32): void {
-    owned_starts[index] = start;
-    owned_ends[index] = end;
-    owned_kinds[index] = kind;
+    owned_regions[index] = Region {
+        start: start,
+        end: end,
+        kind: kind,
+    };
 }
 
 fn add_owned_region(start: usize, end: usize, kind: i32): bool {
@@ -91,8 +98,8 @@ fn add_owned_region(start: usize, end: usize, kind: i32): bool {
     }
 
     var index = used_owned_regions;
-    while index > 0 and owned_starts[index - 1] > start {
-        write_owned_region(index, owned_starts[index - 1], owned_ends[index - 1], owned_kinds[index - 1]);
+    while index > 0 and owned_regions[index - 1].start > start {
+        owned_regions[index] = owned_regions[index - 1];
         index = index - 1;
     }
 
@@ -106,8 +113,9 @@ fn build_regions_from_owned(layout: Layout): bool {
     var index: usize = 0;
 
     while index < used_owned_regions {
-        const start = owned_starts[index];
-        const end = owned_ends[index];
+        const owned = owned_regions[index];
+        const start = owned.start;
+        const end = owned.end;
         if start < layout.ram_start or end > layout.ram_end {
             return false;
         }
@@ -118,7 +126,7 @@ fn build_regions_from_owned(layout: Layout): bool {
         if !add_region(cursor, start, kind_free_ram) {
             return false;
         }
-        if !add_region(start, end, owned_kinds[index]) {
+        if !add_region(start, end, owned.kind) {
             return false;
         }
 
@@ -184,11 +192,7 @@ pub fn get(index: usize): Region {
     if index >= used_regions {
         return empty_region();
     }
-    return Region {
-        start: region_starts[index],
-        end: region_ends[index],
-        kind: region_kinds[index],
-    };
+    return regions[index];
 }
 
 pub fn needs_identity_mapping(kind: i32): bool {

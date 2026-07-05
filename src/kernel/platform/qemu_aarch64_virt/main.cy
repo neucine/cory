@@ -1,6 +1,6 @@
 import .kernel.entry;
 import .kernel.arch.aarch64.page_table;
-import .kernel.boot;
+import .kernel.bootstrap;
 import .kernel.kernel;
 import .kernel.platform.qemu_aarch64_virt.console;
 import .kernel.platform.qemu_aarch64_virt.exception;
@@ -33,7 +33,7 @@ export c("cycor_kernel_entry") fn cycor_kernel_entry(): void {
     kernel.print_entry();
     exception.init();
     const map = memory.layout();
-    boot.prepare_memory(map, page_table.spec(), page_table.arch_id);
+    bootstrap.prepare_memory(map, page_table.spec(), page_table.arch_id);
     vm_activation.activate_identity_vm(vm.bootstrap_plan(map, page_table.spec()).page_table_root);
-    boot.finish_after_memory_ready(map, page_table.spec());
+    bootstrap.finish_after_memory_ready(map, page_table.spec());
 }

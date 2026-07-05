@@ -1,22 +1,39 @@
+import .kernel.collections.slot_map;
+import { StaticSlotMap } from .kernel.collections.slot_map;
 import { Spec } from .kernel.memory.page_table;
 import .kernel.memory.vm;
+import .kernel.object.capability;
+import { CapabilityRights } from .kernel.object.capability;
+import .kernel.object.kernel_object;
+import { KernelObjectKind } from .kernel.object.kernel_object;
 
-pub const invalid_id: usize = 0;
+pub const invalid_id: usize = slot_map.invalid_key;
 pub const max_address_spaces: usize = 8;
 
-pub const kind_empty: i32 = 0;
-pub const kind_kernel: i32 = 1;
-pub const kind_user: i32 = 2;
+pub enum AddressSpaceKind: i32 {
+    empty = 0,
+    kernel,
+    user,
+}
 
-pub const status_ok: i32 = 0;
-pub const status_table_full: i32 = 1;
-pub const status_invalid_bootstrap_plan: i32 = 2;
-pub const status_invalid_id: i32 = 3;
-pub const status_root_unallocated: i32 = 4;
+pub enum AddressSpaceStatus: i32 {
+    ok = 0,
+    table_full,
+    invalid_bootstrap_plan,
+    invalid_id,
+    root_unallocated,
+    object_allocation_failed,
+    capability_allocation_failed,
+    invalid_capability,
+    capability_object_mismatch,
+    capability_right_missing,
+}
 
 pub struct AddressSpace {
     pub id: usize;
-    pub kind: i32;
+    pub object_id: usize;
+    pub capability_id: usize;
+    pub kind: AddressSpaceKind;
     pub root_table: usize;
     pub user_base: usize;
     pub user_end: usize;
@@ -26,24 +43,34 @@ pub struct AddressSpace {
     pub active: bool;
 }
 
-var ids: [8]usize = [0, 0, 0, 0, 0, 0, 0, 0];
-var kinds: [8]i32 = [kind_empty, kind_empty, kind_empty, kind_empty, kind_empty, kind_empty, kind_empty, kind_empty];
-var root_tables: [8]usize = [0, 0, 0, 0, 0, 0, 0, 0];
-var user_bases: [8]usize = [0, 0, 0, 0, 0, 0, 0, 0];
-var user_ends: [8]usize = [0, 0, 0, 0, 0, 0, 0, 0];
-var kernel_bases: [8]usize = [0, 0, 0, 0, 0, 0, 0, 0];
-var kernel_heap_bases: [8]usize = [0, 0, 0, 0, 0, 0, 0, 0];
-var kernel_heap_ends: [8]usize = [0, 0, 0, 0, 0, 0, 0, 0];
-var active_flags: [8]bool = [false, false, false, false, false, false, false, false];
-var used_slots: usize = 0;
-var next_id: usize = 1;
+var spaces: StaticSlotMap<[8]AddressSpace> = StaticSlotMap<[8]AddressSpace> {
+    values: [AddressSpace {
+        id: invalid_id,
+        object_id: kernel_object.invalid_id,
+        capability_id: capability.invalid_id,
+        kind: AddressSpaceKind.empty,
+        root_table: 0,
+        user_base: 0,
+        user_end: 0,
+        kernel_base: 0,
+        kernel_heap_base: 0,
+        kernel_heap_end: 0,
+        active: false,
+    }] ** 8,
+    live: [false] ** 8,
+    generations: [0] ** 8,
+    live_count: 0,
+    last_status: slot_map.status_ok,
+};
 var current_id: usize = invalid_id;
-var last_status: i32 = status_ok;
+var last_status: AddressSpaceStatus = AddressSpaceStatus.ok;
 
 fn empty_address_space(): AddressSpace {
     return AddressSpace {
         id: invalid_id,
-        kind: kind_empty,
+        object_id: kernel_object.invalid_id,
+        capability_id: capability.invalid_id,
+        kind: AddressSpaceKind.empty,
         root_table: 0,
         user_base: 0,
         user_end: 0,
@@ -55,83 +82,103 @@ fn empty_address_space(): AddressSpace {
 }
 
 pub fn init(): void {
+    spaces.clear();
     var index: usize = 0;
     while index < max_address_spaces {
-        ids[index] = invalid_id;
-        kinds[index] = kind_empty;
-        root_tables[index] = 0;
-        user_bases[index] = 0;
-        user_ends[index] = 0;
-        kernel_bases[index] = 0;
-        kernel_heap_bases[index] = 0;
-        kernel_heap_ends[index] = 0;
-        active_flags[index] = false;
+        spaces.values[index] = empty_address_space();
         index = index + 1;
     }
-    used_slots = 0;
-    next_id = 1;
     current_id = invalid_id;
-    last_status = status_ok;
+    last_status = AddressSpaceStatus.ok;
 }
 
 fn index_for_id(id: usize): usize {
-    var index: usize = 0;
-    while index < used_slots {
-        if ids[index] == id {
-            return index;
-        }
-        index = index + 1;
+    if id == invalid_id {
+        return max_address_spaces;
     }
-    return max_address_spaces;
+    if !spaces.contains(id) {
+        return max_address_spaces;
+    }
+    return spaces.index(id);
 }
 
-fn write_slot(index: usize, id: usize, kind: i32, root: usize, user_base: usize, user_end: usize, kernel_base: usize, heap_base: usize, heap_end: usize, active: bool): void {
-    ids[index] = id;
-    kinds[index] = kind;
-    root_tables[index] = root;
-    user_bases[index] = user_base;
-    user_ends[index] = user_end;
-    kernel_bases[index] = kernel_base;
-    kernel_heap_bases[index] = heap_base;
-    kernel_heap_ends[index] = heap_end;
-    active_flags[index] = active;
+fn rights_for_kind(kind: AddressSpaceKind): CapabilityRights {
+    if kind == AddressSpaceKind.kernel {
+        return CapabilityRights.map | CapabilityRights.inspect | CapabilityRights.manage | CapabilityRights.duplicate;
+    }
+    return CapabilityRights.map | CapabilityRights.inspect | CapabilityRights.duplicate;
 }
 
-fn allocate_slot(kind: i32, root: usize, user_base: usize, user_end: usize, kernel_base: usize, heap_base: usize, heap_end: usize, active: bool): usize {
-    if used_slots >= max_address_spaces {
-        last_status = status_table_full;
+fn allocate_slot(kind: AddressSpaceKind, root: usize, user_base: usize, user_end: usize, kernel_base: usize, heap_base: usize, heap_end: usize, active: bool): usize {
+    if spaces.count() >= max_address_spaces {
+        last_status = AddressSpaceStatus.table_full;
         return invalid_id;
     }
-    const id = next_id;
-    next_id = next_id + 1;
-    write_slot(used_slots, id, kind, root, user_base, user_end, kernel_base, heap_base, heap_end, active);
-    used_slots = used_slots + 1;
-    last_status = status_ok;
+    const object_id = kernel_object.allocate(KernelObjectKind.address_space);
+    if object_id == kernel_object.invalid_id {
+        last_status = AddressSpaceStatus.object_allocation_failed;
+        return invalid_id;
+    }
+    const capability_id = capability.mint(object_id, rights_for_kind(kind));
+    if capability_id == capability.invalid_id {
+        if !kernel_object.release(object_id) {
+            return invalid_id;
+        }
+        last_status = AddressSpaceStatus.capability_allocation_failed;
+        return invalid_id;
+    }
+    const id = spaces.reserve();
+    if id == invalid_id {
+        if !capability.release(capability_id) {
+            return invalid_id;
+        }
+        if !kernel_object.release(object_id) {
+            return invalid_id;
+        }
+        last_status = AddressSpaceStatus.table_full;
+        return invalid_id;
+    }
+    spaces.values[spaces.index(id)] = AddressSpace {
+        id: id,
+        object_id: object_id,
+        capability_id: capability_id,
+        kind: kind,
+        root_table: root,
+        user_base: user_base,
+        user_end: user_end,
+        kernel_base: kernel_base,
+        kernel_heap_base: heap_base,
+        kernel_heap_end: heap_end,
+        active: active,
+    };
+    last_status = AddressSpaceStatus.ok;
     return id;
 }
 
 pub fn create_kernel_bootstrap(root_table: usize, user_base: usize, user_end: usize, kernel_base: usize, heap_base: usize, heap_end: usize): usize {
     if root_table == 0 {
-        last_status = status_invalid_bootstrap_plan;
+        last_status = AddressSpaceStatus.invalid_bootstrap_plan;
         return invalid_id;
     }
     if kernel_base == 0 {
-        last_status = status_invalid_bootstrap_plan;
+        last_status = AddressSpaceStatus.invalid_bootstrap_plan;
         return invalid_id;
     }
     if user_end <= user_base {
-        last_status = status_invalid_bootstrap_plan;
+        last_status = AddressSpaceStatus.invalid_bootstrap_plan;
         return invalid_id;
     }
-    const id = allocate_slot(kind_kernel, root_table, user_base, user_end, kernel_base, heap_base, heap_end, true);
+    const id = allocate_slot(AddressSpaceKind.kernel, root_table, user_base, user_end, kernel_base, heap_base, heap_end, true);
     if id != invalid_id {
         current_id = id;
     }
     return id;
 }
 
-pub fn create_user_draft(spec: Spec): usize {
-    return allocate_slot(kind_user, 0, vm.user_virtual_base_for_spec(spec), vm.user_virtual_end_for_spec(spec), vm.kernel_virtual_base_for_spec(spec), vm.kernel_heap_virtual_base_for_spec(spec), vm.kernel_heap_virtual_end_for_spec(spec), false);
+// Creates an unrooted user-shaped address space for policy selftests. Real
+// userspace creation should allocate a root page table before mapping pages.
+pub fn create_user_policy_fixture(spec: Spec): usize {
+    return allocate_slot(AddressSpaceKind.user, 0, vm.user_virtual_base_for_spec(spec), vm.user_virtual_end_for_spec(spec), vm.kernel_virtual_base_for_spec(spec), vm.kernel_heap_virtual_base_for_spec(spec), vm.kernel_heap_virtual_end_for_spec(spec), false);
 }
 
 pub fn get(id: usize): AddressSpace {
@@ -139,101 +186,135 @@ pub fn get(id: usize): AddressSpace {
     if index >= max_address_spaces {
         return empty_address_space();
     }
-    return AddressSpace {
-        id: ids[index],
-        kind: kinds[index],
-        root_table: root_tables[index],
-        user_base: user_bases[index],
-        user_end: user_ends[index],
-        kernel_base: kernel_bases[index],
-        kernel_heap_base: kernel_heap_bases[index],
-        kernel_heap_end: kernel_heap_ends[index],
-        active: active_flags[index],
-    };
+    return spaces.values[index];
 }
 
 pub fn count(): usize {
-    return used_slots;
+    return spaces.count();
 }
 
 pub fn current(): usize {
     return current_id;
 }
 
-pub fn status(): i32 {
+pub fn status(): AddressSpaceStatus {
     return last_status;
 }
 
-pub fn kind(id: usize): i32 {
+pub fn kind(id: usize): AddressSpaceKind {
     const index = index_for_id(id);
     if index >= max_address_spaces {
-        last_status = status_invalid_id;
-        return kind_empty;
+        last_status = AddressSpaceStatus.invalid_id;
+        return AddressSpaceKind.empty;
     }
-    return kinds[index];
+    return spaces.values[index].kind;
+}
+
+pub fn object_id(id: usize): usize {
+    const index = index_for_id(id);
+    if index >= max_address_spaces {
+        last_status = AddressSpaceStatus.invalid_id;
+        return kernel_object.invalid_id;
+    }
+    return spaces.values[index].object_id;
+}
+
+pub fn capability_id(id: usize): usize {
+    const index = index_for_id(id);
+    if index >= max_address_spaces {
+        last_status = AddressSpaceStatus.invalid_id;
+        return capability.invalid_id;
+    }
+    return spaces.values[index].capability_id;
+}
+
+pub fn capability_has_rights(id: usize, rights: CapabilityRights): bool {
+    const cap = capability_id(id);
+    if cap == capability.invalid_id {
+        return false;
+    }
+    return capability.has_rights(cap, rights);
+}
+
+fn capability_authorizes(index: usize, cap_id: usize, required_rights: CapabilityRights): bool {
+    const cap = capability.get(cap_id);
+    if !cap.live {
+        last_status = AddressSpaceStatus.invalid_capability;
+        return false;
+    }
+    if cap.object_id != spaces.values[index].object_id {
+        last_status = AddressSpaceStatus.capability_object_mismatch;
+        return false;
+    }
+    if !capability.has_rights(cap_id, required_rights) {
+        last_status = AddressSpaceStatus.capability_right_missing;
+        return false;
+    }
+    last_status = AddressSpaceStatus.ok;
+    return true;
 }
 
 pub fn root_table(id: usize): usize {
     const index = index_for_id(id);
     if index >= max_address_spaces {
-        last_status = status_invalid_id;
+        last_status = AddressSpaceStatus.invalid_id;
         return 0;
     }
-    return root_tables[index];
+    return spaces.values[index].root_table;
 }
 
 pub fn user_base(id: usize): usize {
     const index = index_for_id(id);
     if index >= max_address_spaces {
-        last_status = status_invalid_id;
+        last_status = AddressSpaceStatus.invalid_id;
         return 0;
     }
-    return user_bases[index];
+    return spaces.values[index].user_base;
 }
 
 pub fn user_end(id: usize): usize {
     const index = index_for_id(id);
     if index >= max_address_spaces {
-        last_status = status_invalid_id;
+        last_status = AddressSpaceStatus.invalid_id;
         return 0;
     }
-    return user_ends[index];
+    return spaces.values[index].user_end;
 }
 
 pub fn kernel_base(id: usize): usize {
     const index = index_for_id(id);
     if index >= max_address_spaces {
-        last_status = status_invalid_id;
+        last_status = AddressSpaceStatus.invalid_id;
         return 0;
     }
-    return kernel_bases[index];
+    return spaces.values[index].kernel_base;
 }
 
 pub fn kernel_heap_base(id: usize): usize {
     const index = index_for_id(id);
     if index >= max_address_spaces {
-        last_status = status_invalid_id;
+        last_status = AddressSpaceStatus.invalid_id;
         return 0;
     }
-    return kernel_heap_bases[index];
+    return spaces.values[index].kernel_heap_base;
 }
 
 pub fn kernel_heap_end(id: usize): usize {
     const index = index_for_id(id);
     if index >= max_address_spaces {
-        last_status = status_invalid_id;
+        last_status = AddressSpaceStatus.invalid_id;
         return 0;
     }
-    return kernel_heap_ends[index];
+    return spaces.values[index].kernel_heap_end;
 }
 
 pub fn active(id: usize): bool {
     const index = index_for_id(id);
     if index >= max_address_spaces {
-        last_status = status_invalid_id;
+        last_status = AddressSpaceStatus.invalid_id;
         return false;
     }
-    return active_flags[index];
+    return spaces.values[index].active;
 }
 
 pub fn has_root(id: usize): bool {
@@ -241,44 +322,65 @@ pub fn has_root(id: usize): bool {
 }
 
 pub fn can_map_user_page(id: usize, virt: usize, phys: usize, rights: u8, spec: Spec): bool {
+    return capability_can_map_user_page(capability_id(id), id, virt, phys, rights, spec);
+}
+
+pub fn capability_can_map_user_page(cap_id: usize, id: usize, virt: usize, phys: usize, rights: u8, spec: Spec): bool {
     const index = index_for_id(id);
     if index >= max_address_spaces {
-        last_status = status_invalid_id;
+        last_status = AddressSpaceStatus.invalid_id;
         return false;
     }
-    if kinds[index] != kind_user {
+    if !capability_authorizes(index, cap_id, CapabilityRights.map) {
         return false;
     }
-    if root_tables[index] == 0 {
-        last_status = status_root_unallocated;
+    if spaces.values[index].kind != AddressSpaceKind.user {
+        return false;
+    }
+    if spaces.values[index].root_table == 0 {
+        last_status = AddressSpaceStatus.root_unallocated;
         return false;
     }
     return vm.validate_user_page_mapping(virt, phys, rights, spec);
 }
 
 pub fn accepts_user_mapping_policy(id: usize, virt: usize, phys: usize, rights: u8, spec: Spec): bool {
+    return capability_accepts_user_mapping_policy(capability_id(id), id, virt, phys, rights, spec);
+}
+
+pub fn capability_accepts_user_mapping_policy(cap_id: usize, id: usize, virt: usize, phys: usize, rights: u8, spec: Spec): bool {
     const index = index_for_id(id);
     if index >= max_address_spaces {
-        last_status = status_invalid_id;
+        last_status = AddressSpaceStatus.invalid_id;
         return false;
     }
-    if kinds[index] != kind_user {
+    if !capability_authorizes(index, cap_id, CapabilityRights.map) {
+        return false;
+    }
+    if spaces.values[index].kind != AddressSpaceKind.user {
         return false;
     }
     return vm.validate_user_page_mapping(virt, phys, rights, spec);
 }
 
 pub fn can_map_kernel_page(id: usize, virt: usize, phys: usize, rights: u8, spec: Spec): bool {
+    return capability_can_map_kernel_page(capability_id(id), id, virt, phys, rights, spec);
+}
+
+pub fn capability_can_map_kernel_page(cap_id: usize, id: usize, virt: usize, phys: usize, rights: u8, spec: Spec): bool {
     const index = index_for_id(id);
     if index >= max_address_spaces {
-        last_status = status_invalid_id;
+        last_status = AddressSpaceStatus.invalid_id;
         return false;
     }
-    if kinds[index] != kind_kernel {
+    if !capability_authorizes(index, cap_id, CapabilityRights.map) {
         return false;
     }
-    if root_tables[index] == 0 {
-        last_status = status_root_unallocated;
+    if spaces.values[index].kind != AddressSpaceKind.kernel {
+        return false;
+    }
+    if spaces.values[index].root_table == 0 {
+        last_status = AddressSpaceStatus.root_unallocated;
         return false;
     }
     return vm.validate_kernel_page_mapping(virt, phys, rights, spec);

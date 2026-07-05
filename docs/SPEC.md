@@ -5,6 +5,8 @@ Project: Cycor
 Pronunciation: Sai-core  
 Repository: neucine/cycor
 
+See `docs/ARCHITECTURE.md` for the shorter source-layout and boot-flow map.
+
 ## Purpose
 
 Cycor is a Cyna-native capability kernel substrate.
@@ -622,7 +624,7 @@ Near-term VM goals:
 - define physical-address and virtual-address naming conventions: done
 - identity-map the kernel image and all non-`free_ram` memory-map regions:
   encoded and activated for the bootstrap map
-- establish a kernel virtual range for future heap migration: architecture-canonical, named, not mapped
+- establish a kernel virtual range for future heap migration: architecture-canonical and mapped for committed heap pages
 - define page-table geometry per architecture: done
 - encode architecture leaf entries for bootstrap mapping rights: done
 - allocate bootstrap page-table storage from physical memory: done
@@ -941,9 +943,39 @@ Current status:
 - RISC-V has an M-mode shim that enters the kernel in S-mode.
 - Physical allocation, pre-VM heap, memory-map ownership, and heap diagnostics
   exist.
-- VM is not implemented.
-- Kernel objects, capabilities, scheduler, userspace, IPC, and shared buffers
-  are not implemented.
+- Bootstrap VM and address-space metadata exist for both QEMU targets.
+- Address-space records use bounded slotmap IDs and have backing kernel object
+  identity plus explicit capabilities.
+- Address-space mapping policy APIs check capabilities before accepting map
+  requests.
+- Boot selftests are split into memory, object, and architecture modules behind
+  a small `kernel.selftest` facade.
+- A bounded kernel slotmap helper defines packed index/generation handles for
+  fixed tables without hidden allocation. Current variants cover 8, 16, and
+  32 entries.
+- Kernel process metadata exists, uses bounded slotmap process IDs, and is
+  backed by kernel object identity, process capabilities, and a duplicated
+  kernel address-space capability.
+- Kernel process capability spaces exist as fixed local tables that point to
+  global capabilities. Local slots can be removed, and stale slots whose global
+  capability was released are invalidated on lookup. Owner rows decode the
+  bounded process handle slot index and validate the owner key generation.
+- Kernel thread metadata exists, is created through process-local authority,
+  and installs a thread handle into the owning process capability space.
+- A fixed scheduler run queue and round-robin scheduler decision primitive exist
+  for ready-thread metadata; no context switching is implemented yet.
+- Portable thread context metadata exists and stores architecture-owned context
+  descriptor handles; real saved-register state and switching are not
+  implemented yet.
+- Architecture context descriptors are importable by common cross-arch tests
+  without pulling in target-specific assembler exports.
+- Cyna gaps identified by kernel slotmap work were reproduced and fixed
+  upstream: mutable references to module globals work for this path, and
+  freestanding aggregate lowering has memory helper support.
+- Kernel object IDs and capability IDs use bounded slotmap handles; fixed
+  object/capability tables, basic capability rights checks, and capability
+  duplication exist.
+- Scheduler, userspace, IPC, and shared buffers are not implemented.
 
 ### Phase 0 — Specification and Repo Shape
 
@@ -1047,10 +1079,10 @@ Done:
 
 Next:
 
-- kernel virtual heap range: architecture-canonical and mapped for committed
-  pre-VM heap pages
-- transition heap from pre-VM physical identity mapping to VM-backed virtual
-  mapping: done for committed bootstrap heap pages and dynamic page growth
+- grow VM support from bootstrap tables into per-address-space page-table
+  ownership
+- connect kernel object identity to address-space and future process/thread
+  handles
 
 ### Phase 4 — Virtual Memory and Address Spaces
 
@@ -1068,8 +1100,31 @@ Deliverables:
 - identity mapping for boot-owned regions
 - kernel heap virtual range
 - user/kernel memory split
-- address-space object draft: fixed-table kernel/user metadata with mapping
-  policy checks
+- kernel address-space bootstrap: fixed-table metadata with backing kernel
+  object identity, explicit capabilities, and capability-authorized map checks
+- user address-space policy fixture: selftest-only, unrooted metadata for
+  validating future user mapping boundaries
+
+### Phase 4.5 — Kernel Collections
+
+Goal:
+
+```text
+Factor repeated bounded-table patterns without adding hidden allocation.
+```
+
+Deliverables:
+
+- bounded slotmap key vocabulary: fixed 8-entry, 16-entry, and 32-entry
+  index/generation handles done
+- local collection selftests for key packing: done
+- arch context descriptor tables use slotmap key rules: done
+- address-space metadata uses fixed 8-entry slotmap key rules: done
+- portable thread context metadata uses slotmap liveness and count rules: done
+- process metadata uses fixed 8-entry slotmap key rules: done
+- object metadata uses fixed 32-entry slotmap key rules: done
+- capability metadata uses fixed 32-entry slotmap key rules: done
+- direct bounded-table helper usable with module-global storage: done
 
 ### Phase 5 — Kernel Objects and Capabilities
 
@@ -1081,13 +1136,23 @@ Represent object identity, lifetime, and authority.
 
 Deliverables:
 
-- kernel object IDs
-- object table
-- capability table
-- rights checks
-- capability duplication
+- kernel object IDs: fixed 32-entry slotmap keys done
+- object table: initial fixed table with slotmap liveness done
+- capability IDs: fixed 32-entry slotmap keys done
+- capability table: initial fixed table with slotmap liveness done
+- rights checks: initial checks done
+- capability duplication: initial narrowing duplicate done
 - capability transfer draft
-- object lifetime/refcount model
+- object lifetime/refcount model: initial retain/release done
+- address-space object identity: done
+- address-space capabilities: done
+- capability-authorized address-space map checks: done
+- kernel process object identity and root capability: done
+- process-local capability table: fixed table, slot removal, stale-handle
+  invalidation, and owner-key generation validation done
+- process teardown: clears owner capability rows and releases process-owned
+  capabilities plus backing object done
+- thread root handle in owning process capability table: done
 - revocation draft
 
 ### Phase 6 — Threads, Timers, and Scheduler
@@ -1100,7 +1165,12 @@ Run multiple execution contexts.
 
 Deliverables:
 
-- thread object
+- kernel process metadata: initial fixed table with slotmap process IDs done
+- thread object: initial metadata-only table done
+- portable thread context metadata: initial table done
+- architecture-owned context descriptor storage: initial fixed tables done
+- scheduler run queue: initial fixed queue done
+- scheduler decision primitive: round-robin metadata transition done
 - context switch
 - scheduler loop
 - timer interrupt

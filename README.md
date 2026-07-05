@@ -17,6 +17,8 @@ Cycor    — Cyna-native kernel substrate
 ## Canonical specification
 
 The full project specification is in [`docs/SPEC.md`](docs/SPEC.md).
+For a shorter reader path through the current implementation, see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 For the early phase of the project, `docs/SPEC.md` is the single source of truth. Sections can be split into separate docs later when the design becomes too large to edit comfortably.
 
@@ -32,6 +34,8 @@ GitHub language percentages until Cyna is supported upstream.
 ```text
 src/kernel/           Platform-neutral kernel source
 src/kernel/arch/      CPU architecture entry and exception/trap assembly
+src/kernel/memory/    Physical memory, heap, VM, page tables, address spaces
+src/kernel/object/    Kernel object identity and capability authority
 src/kernel/platform/  Kernel-owned platform startup, memory maps, console, and linker scripts
 src/user/             Userspace source, intentionally empty until needed
 ```
@@ -91,8 +95,8 @@ build/cycor-riscv64.bin
 ```
 
 The current kernel entries write to the QEMU `virt` UART, initialize exception
-or trap vectors, run the boot allocator self-test, and then halt. When QEMU is
-available, run:
+or trap vectors, run common bootstrap selftests through memory, VM, address
+spaces, and object/capability contracts, then halt. When QEMU is available, run:
 
 ```text
 qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cycor.elf

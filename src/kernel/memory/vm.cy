@@ -47,11 +47,13 @@ pub struct VmBootstrapPlan {
 
 pub const max_mapping_requests: usize = 20;
 
-var mapping_virt_starts: [20]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-var mapping_phys_starts: [20]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-var mapping_sizes: [20]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-var mapping_rights: [20]u8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-var mapping_kinds: [20]i32 = [memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram, memory_map.kind_free_ram];
+var mapping_requests: [20]MappingRequest = [MappingRequest {
+    virt_start: 0,
+    phys_start: 0,
+    size: 0,
+    rights: 0,
+    kind: memory_map.kind_free_ram,
+}] ** 20;
 var used_mapping_requests: usize = 0;
 var kernel_heap_mapping_count: usize = 0;
 
@@ -281,11 +283,13 @@ fn reset_mapping_requests(): void {
 }
 
 fn write_mapping_request(index: usize, virt_start: VirtAddr, phys_start: PhysAddr, size: usize, rights: u8, kind: i32): void {
-    mapping_virt_starts[index] = virt_start;
-    mapping_phys_starts[index] = phys_start;
-    mapping_sizes[index] = size;
-    mapping_rights[index] = rights;
-    mapping_kinds[index] = kind;
+    mapping_requests[index] = MappingRequest {
+        virt_start: virt_start,
+        phys_start: phys_start,
+        size: size,
+        rights: rights,
+        kind: kind,
+    };
 }
 
 fn append_mapping_request(virt_start: VirtAddr, phys_start: PhysAddr, size: usize, rights: u8, kind: i32, spec: Spec): bool {
@@ -333,7 +337,7 @@ fn estimate_bootstrap_page_table_pages(layout: Layout, spec: Spec, extra_mapping
     var total: usize = 1;
     var index: usize = 0;
     while index < used_mapping_requests {
-        total = total + table_pages_for_page_count(div_round_up(mapping_sizes[index], layout.page_size), spec);
+        total = total + table_pages_for_page_count(div_round_up(mapping_requests[index].size, layout.page_size), spec);
         index = index + 1;
     }
     total = total + table_pages_for_page_count(extra_mapping_pages, spec);
@@ -489,13 +493,7 @@ pub fn mapping_request(index: usize): MappingRequest {
     if index >= used_mapping_requests {
         return empty_mapping_request();
     }
-    return MappingRequest {
-        virt_start: mapping_virt_starts[index],
-        phys_start: mapping_phys_starts[index],
-        size: mapping_sizes[index],
-        rights: mapping_rights[index],
-        kind: mapping_kinds[index],
-    };
+    return mapping_requests[index];
 }
 
 pub fn validate_kernel_heap_range(spec: Spec): bool {
