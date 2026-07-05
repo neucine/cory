@@ -205,8 +205,9 @@ Rules:
 - Common kernel code must depend on architecture/platform traits or small Cyna
   modules, not on concrete QEMU constants.
 - Platform memory layout must include both RAM and boot-critical MMIO ranges.
-  Current QEMU platforms publish the UART MMIO page so VM activation can keep
-  panic and boot logging reachable after identity translation is enabled.
+  Current QEMU platforms publish platform device MMIO ranges so VM activation
+  can keep panic logging and interrupt-controller access reachable after
+  identity translation is enabled.
 - `extern c` declarations are a C ABI boundary, not an ordinary Cyna boundary.
   Use C ABI carrier types such as `c_ulong`, `c_size_t`, pointers, and
   C-layout structs in the declaration, then convert to kernel-native types such
@@ -296,6 +297,8 @@ Current implementation status:
   the architecture `trap_frame.cy` module.
 - Cyna receives a pointer to the saved frame and derives the current diagnostic
   output from that frame.
+- AArch64 vector slots now dispatch synchronous exceptions and IRQs to distinct
+  Cyna entrypoints while preserving the same trap-frame layout.
 - Opt-in restore probes validate register restore and trap return on both
   targets. Syscall dispatch, page-fault recovery, normal trap-return dispatch,
   and user-mode return are not implemented yet.
@@ -496,7 +499,7 @@ Decision:
 - address labels: `PhysAddr` and `VirtAddr`
 - current implementation: naming, rights, bootstrap mapping requests, and
   architecture page-table geometry, leaf-entry encoding contracts, bootstrap
-  page-table storage allocation, platform UART MMIO identity mapping, and
+  page-table storage allocation, platform device MMIO identity mapping, and
   platform-owned identity-map activation
 
 `PhysAddr` and `VirtAddr` are semantic labels over `usize` for now. They make
@@ -591,7 +594,7 @@ VM bootstrap mapping requests are generated from the canonical memory map:
 - one additional `kernel_heap_virtual` request maps committed heap pages into
   the architecture-canonical high-half heap range
 - start and end must be page-aligned
-- platform UART MMIO is represented as `device_mmio`
+- platform device MMIO is represented as `device_mmio`
 - kernel image temporarily maps read/write/execute
 - boot allocator, physical page bitmap, pre-VM heap, MMIO, and stack map
   read/write
@@ -1000,19 +1003,33 @@ Current status:
   thread, write selected resume state, restore with `eret` or `sret`, then
   panic intentionally.
 - Target-local trap-context modules expose a reusable schedule-and-restore path
-  for future timer/interrupt handlers; normal trap handlers remain panic-only.
+  for timer/interrupt handlers; normal trap handlers remain panic-only.
 - The reusable trap scheduling path records target-local failure status for
   schedule failure and missing resume state.
 - Platform timer groundwork exists for both QEMU targets: AArch64 reads
   `cntfrq_el0`/`cntvct_el0` and programs masked virtual timer deadlines through
   `cntv_tval_el0`/`cntv_ctl_el0`, RISC-V64 grants S-mode `time` access through
   `mcounteren`, and normal boot checks prove the counters are readable.
+- AArch64 platform interrupt glue centralizes IRQ mask/unmask, GICv2
+  acknowledge/EOI, virtual timer IRQ setup, and timer IRQ completion. Normal
+  boot exports a panic-only IRQ entrypoint, configures the virtual timer IRQ
+  route, and leaves IRQs masked.
+- AArch64 tick delivery policy exists as explicit platform state. Normal boot
+  initializes delivery disabled; opt-in probes exercise diagnostic delivery and
+  scheduler consumption separately.
 - An opt-in AArch64 timer IRQ probe configures the QEMU `virt` GICv2 virtual
-  timer PPI, unmasks IRQs, receives INTID 27, disarms the timer, and panics
-  intentionally. Normal boot still leaves timer IRQs disabled.
-- Current next kernel slice: connect AArch64 timer IRQ delivery to the existing
-  target-local schedule-and-restore path in an opt-in image, then graduate only
-  the boring pieces into normal boot.
+  timer PPI through that interrupt module, unmasks IRQs, receives INTID 27,
+  disarms the timer, and panics intentionally. Normal boot still leaves timer
+  IRQs disabled.
+- An opt-in AArch64 diagnostic tick probe enables dry-run tick delivery,
+  receives INTID 27, completes the timer IRQ, and panics intentionally without
+  scheduling.
+- An opt-in AArch64 timer scheduling probe configures the virtual timer PPI,
+  receives INTID 27, disarms and EOIs the interrupt, schedules a ready kernel
+  thread from the saved trap frame, and restores with `eret`. Normal boot still
+  leaves timer-driven preemption disabled.
+- Current next kernel slice: decide whether normal boot should first unmask only
+  diagnostic ticks or wait for scheduler policy.
 - Cyna gaps identified by kernel slotmap work were reproduced and fixed
   upstream: mutable references to module globals work for this path, and
   freestanding aggregate lowering has memory helper support.
@@ -1115,7 +1132,7 @@ Done:
 - bootstrap page-table storage allocation and memory-map ownership
 - page-table zeroing and non-leaf descriptor contract
 - bootstrap identity page-table population and lookup selftests
-- platform UART MMIO identity mapping contract
+- platform device MMIO identity mapping contract
 - architecture MMU activation register-value contract
 - bootstrap page map/unmap operations with explicit rights
 - heap diagnostics
@@ -1219,8 +1236,7 @@ Deliverables:
 - scheduler save-aware handoff primitive: done
 - opt-in trap-frame restore probes: done for AArch64 and RISC-V64
 - opt-in trap-driven scheduler handoff probes: done for AArch64 and RISC-V64
-- timer interrupt: AArch64 diagnostic delivery done; scheduler integration not
-  done
+- timer interrupt: AArch64 diagnostic delivery and opt-in scheduler handoff done
 - context switch: diagnostic trap-frame restore exists; normal scheduling path
   not done
 - scheduler loop

@@ -135,27 +135,43 @@ proofs, but not yet through normal preemption:
   mappings, and run memory/object/task/arch selftests.
 - Trap-frame layout is owned by target `cstruct` definitions and verified at
   boot before vectors are installed.
+- AArch64 vector slots dispatch synchronous exceptions and IRQs to distinct
+  Cyna entrypoints while preserving the same saved trap-frame layout.
 - AArch64 and RISC-V64 opt-in restore probes resume from deliberate traps using
   `eret` and `sret`.
 - AArch64 and RISC-V64 opt-in scheduler probes save an interrupted trap frame,
   select a ready thread, write selected resume state, and restore into that
   thread.
 - AArch64 normal boot proves readable counters and masked virtual timer
-  deadline programming. RISC-V64 normal boot proves S-mode `time` readability.
-- The AArch64 timer IRQ probe configures QEMU `virt` GICv2, receives virtual
-  timer INTID 27, disarms the timer, and EOIs the interrupt.
+  deadline programming, then configures the virtual timer IRQ route while IRQs
+  remain masked. RISC-V64 normal boot proves S-mode `time` readability.
+- The AArch64 platform interrupt module owns IRQ mask/unmask, GICv2
+  acknowledge/EOI, and virtual timer IRQ completion helpers.
+- The AArch64 tick policy module owns timer tick delivery state. Normal boot
+  defaults delivery to disabled; opt-in probes exercise diagnostic delivery and
+  scheduler consumption separately.
+- Normal AArch64 boot exports an explicit panic-only IRQ entrypoint.
+- The AArch64 timer IRQ probe configures QEMU `virt` GICv2 through the
+  interrupt module, receives virtual timer INTID 27, disarms the timer, and EOIs
+  the interrupt.
+- The AArch64 diagnostic tick probe enables dry-run tick delivery, receives
+  INTID 27, completes the timer IRQ, and does not schedule.
+- The AArch64 timer scheduling probe receives virtual timer INTID 27, disarms
+  and EOIs it, then uses the target-local schedule-and-restore path to resume a
+  ready thread.
 
-The important boundary: timer IRQ delivery is diagnostic-only. Normal boot does
-not yet enable timer interrupts, and the scheduler is not yet driven by a timer.
+The important boundary: timer-driven scheduling is still diagnostic-only.
+Normal boot configures the AArch64 timer IRQ route, but does not unmask IRQs and
+keeps tick delivery disabled.
 
 ## Subsystem Direction
 
 Near-term work should make existing layers easier to reason about before moving
 up to scheduler/userspace:
 
-- connect the AArch64 timer IRQ probe to the target-local schedule-and-restore
-  path in an opt-in image
 - keep normal boot panic-only until interrupt scheduling is boring in probes
+- decide whether normal boot should first unmask only diagnostic ticks or wait
+  for scheduler policy
 - add the matching RISC-V timer interrupt path after the AArch64 path is stable
 - keep QEMU AArch64 and RISC-V64 boot checks green after every slice
 

@@ -153,6 +153,11 @@ pub fn rebuild(layout: Layout): bool {
             return false;
         }
     }
+    if layout.device_mmio2_end > layout.device_mmio2_start {
+        if !add_region(layout.device_mmio2_start, layout.device_mmio2_end, kind_device_mmio) {
+            return false;
+        }
+    }
 
     // Owned ranges can be discovered in subsystem order, not address order.
     // Build a sorted owned list first, then fill every gap as `free_ram`.

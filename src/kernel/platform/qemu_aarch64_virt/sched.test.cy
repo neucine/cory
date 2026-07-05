@@ -97,7 +97,7 @@ fn prepare_ready_thread(): void {
     println("schedtest: ready thread b");
 }
 
-export c("cory_arch_exception_entry") fn cory_arch_exception_entry(raw_frame: *TrapFrame): void {
+export c("cory_arch_sync_exception_entry") fn cory_arch_sync_exception_entry(raw_frame: *TrapFrame): void {
     println("schedtest: trap thread a");
     if scheduler.peek() != thread_b_id {
         println("schedtest: schedule failed");
@@ -115,6 +115,11 @@ export c("cory_arch_exception_entry") fn cory_arch_exception_entry(raw_frame: *T
         panic_mod.panic();
     }
     println("schedtest: restore returned unexpectedly");
+    panic_mod.panic();
+}
+
+export c("cory_arch_irq_exception_entry") fn cory_arch_irq_exception_entry(raw_frame: *TrapFrame): void {
+    println("schedtest: unexpected irq");
     panic_mod.panic();
 }
 

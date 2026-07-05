@@ -5,7 +5,9 @@ import .kernel.bootstrap;
 import .kernel.kernel;
 import .kernel.platform.qemu_aarch64_virt.console;
 import .kernel.platform.qemu_aarch64_virt.exception;
+import .kernel.platform.qemu_aarch64_virt.interrupt;
 import .kernel.platform.qemu_aarch64_virt.memory;
+import .kernel.platform.qemu_aarch64_virt.tick;
 import .kernel.platform.qemu_aarch64_virt.timer;
 import .kernel.platform.qemu_aarch64_virt.vm_activation;
 import .kernel.memory.map as memory_map;
@@ -45,6 +47,11 @@ export c("cory_kernel_entry") fn cory_kernel_entry(): void {
         panic_mod.panic();
     }
     println("timer: deadline ready");
+    tick.init_disabled();
+    interrupt.mask();
+    interrupt.init_timer_irq();
+    println("interrupt: timer irq configured");
+    println("tick: delivery disabled");
     const map = memory.layout();
     bootstrap.prepare_memory(map, page_table.spec(), page_table.arch_id);
     vm_activation.activate_identity_vm(vm.bootstrap_plan(map, page_table.spec()).page_table_root);

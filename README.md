@@ -81,14 +81,19 @@ Cory currently boots both QEMU targets into kernel selftests:
 - RISC-V64 `virt` uses a small M-mode shim and enters the kernel in S-mode.
 - Both targets initialize trap vectors, capture full trap frames, and expose
   resume-state helpers.
+- AArch64 separates synchronous exception and IRQ vector callbacks while
+  preserving one trap-frame layout; normal boot exports a panic-only IRQ entry.
 - Memory bootstrap, bootstrap page tables, physical pages, heap, address-space
   metadata, kernel object IDs, capabilities, process metadata, thread metadata,
   and scheduler metadata all have boot-time selftests.
 - Opt-in probes validate deliberate traps, trap-frame restore with `eret`/`sret`,
-  and a trap-driven scheduler handoff on both targets.
+  and a trap-driven scheduler handoff on both targets. AArch64 also validates a
+  dry-run diagnostic tick and a timer-IRQ-driven scheduler handoff in opt-in
+  probes.
 - Timer groundwork exists on both targets; AArch64 also proves masked deadline
-  programming and diagnostic virtual timer IRQ delivery through QEMU `virt`
-  GICv2 INTID 27.
+  programming, configures the virtual timer IRQ route with IRQs masked, keeps a
+  default-disabled tick delivery policy, and validates diagnostic virtual timer
+  IRQ delivery through QEMU `virt` GICv2 INTID 27.
 
 Still intentionally missing: normal timer-driven preemption, a real scheduler
 loop, userspace entry, syscalls, IPC, and shared buffers.
@@ -116,8 +121,9 @@ build/cory-riscv64.bin
 
 The current kernel entries write to the QEMU `virt` UART, initialize exception
 or trap vectors, verify readable timer counters plus masked AArch64 deadline
-programming, run common bootstrap selftests through memory, VM, address spaces,
-and object/capability contracts, then halt.
+programming, configure the AArch64 timer IRQ route with IRQs still masked and
+tick delivery disabled, run common bootstrap selftests through memory, VM,
+address spaces, and object/capability contracts, then halt.
 When QEMU is available, run:
 
 ```text
@@ -133,6 +139,8 @@ tools/check.sh traps
 tools/check.sh restore
 tools/check.sh sched
 tools/check.sh timerirq
+tools/check.sh timerdiag
+tools/check.sh timersched
 tools/check.sh all
 ```
 
@@ -193,3 +201,29 @@ tools/check.sh timerirq-aarch64
 It configures the virtual timer PPI, unmasks IRQs, receives INTID 27, disarms
 the timer, prints `timerirqtest: received virtual timer irq`, then intentionally
 panics. This is still diagnostic-only; normal boot does not enable timer IRQs.
+
+## Diagnostic tick probe
+
+The AArch64 diagnostic tick probe validates the dry-run tick policy mode:
+
+```text
+tools/check.sh timerdiag-aarch64
+```
+
+It enables tick delivery in diagnostic mode, receives INTID 27, disarms and EOIs
+the timer interrupt, prints `timerdiagtest: diagnostic tick`, then intentionally
+panics. It does not schedule.
+
+## Timer scheduling probe
+
+The AArch64 timer scheduling probe validates the first timer-driven
+schedule-and-restore handoff in an opt-in image:
+
+```text
+tools/check.sh timersched-aarch64
+```
+
+It creates a ready kernel thread, programs the virtual timer, receives INTID 27,
+disarms and EOIs the timer interrupt, schedules the ready thread from the saved
+trap frame, restores with `eret`, prints `timerschedtest: thread b resumed`,
+then intentionally panics. Normal boot still does not enable preemption.

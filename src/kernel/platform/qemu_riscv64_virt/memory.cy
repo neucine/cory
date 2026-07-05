@@ -17,5 +17,7 @@ pub fn layout(): Layout {
         page_size: page_size,
         device_mmio_start: uart_mmio_start,
         device_mmio_end: uart_mmio_end,
+        device_mmio2_start: 0,
+        device_mmio2_end: 0,
     };
 }

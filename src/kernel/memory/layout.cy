@@ -5,4 +5,6 @@ pub struct Layout {
     pub page_size: usize;
     pub device_mmio_start: usize;
     pub device_mmio_end: usize;
+    pub device_mmio2_start: usize;
+    pub device_mmio2_end: usize;
 }

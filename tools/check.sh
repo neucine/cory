@@ -18,12 +18,16 @@ commands:
   sched-aarch64 check, build, and boot the opt-in AArch64 trap scheduler probe
   sched-riscv64 check, build, and boot the opt-in RISC-V64 trap scheduler probe
   timerirq-aarch64 check, build, and boot the opt-in AArch64 timer IRQ probe
+  timerdiag-aarch64 check, build, and boot the opt-in AArch64 diagnostic tick probe
+  timersched-aarch64 check, build, and boot the opt-in AArch64 timer scheduler probe
   normal         run aarch64 and riscv64
   traps          run trap-aarch64 and trap-riscv64
   restore        run restore-aarch64 and restore-riscv64
   sched          run sched-aarch64 and sched-riscv64
   timerirq       run timerirq-aarch64
-  all            run normal, traps, restore, sched, and timerirq
+  timerdiag      run timerdiag-aarch64
+  timersched     run timersched-aarch64
+  all            run normal, traps, restore, sched, timerirq, timerdiag, and timersched
 EOF
 }
 
@@ -104,7 +108,7 @@ run_probe() {
 run_aarch64() {
   "$CYNA" check .
   "$CYNA" build .
-  run_qemu_expect aarch64 "timer: deadline ready" "memory: physical pages ready" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory.elf
+  run_qemu_expect aarch64 "tick: delivery disabled" "memory: physical pages ready" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory.elf
 }
 
 run_riscv64() {
@@ -141,6 +145,14 @@ run_timerirq_aarch64() {
   run_probe timerirq-aarch64 cyna.toml cory-timerirqtest src/kernel/platform/qemu_aarch64_virt/timerirq.test.cy "" "timerirqtest: waiting for virtual timer irq" "timerirqtest: received virtual timer irq" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-timerirqtest.elf
 }
 
+run_timerdiag_aarch64() {
+  run_probe timerdiag-aarch64 cyna.toml cory-timerdiagtest src/kernel/platform/qemu_aarch64_virt/timerdiag.test.cy "" "timerdiagtest: waiting for diagnostic tick" "timerdiagtest: diagnostic tick" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-timerdiagtest.elf
+}
+
+run_timersched_aarch64() {
+  run_probe timersched-aarch64 cyna.toml cory-timerschedtest src/kernel/platform/qemu_aarch64_virt/timersched.test.cy src/kernel/platform/qemu_aarch64_virt/schedtest.S "timerschedtest: selected thread b" "timerschedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-timerschedtest.elf
+}
+
 run_normal() {
   run_aarch64
   run_riscv64
@@ -163,6 +175,14 @@ run_sched() {
 
 run_timerirq() {
   run_timerirq_aarch64
+}
+
+run_timerdiag() {
+  run_timerdiag_aarch64
+}
+
+run_timersched() {
+  run_timersched_aarch64
 }
 
 command="${1:-}"
@@ -194,6 +214,12 @@ case "$command" in
   timerirq-aarch64)
     run_timerirq_aarch64
     ;;
+  timerdiag-aarch64)
+    run_timerdiag_aarch64
+    ;;
+  timersched-aarch64)
+    run_timersched_aarch64
+    ;;
   normal)
     run_normal
     ;;
@@ -209,12 +235,20 @@ case "$command" in
   timerirq)
     run_timerirq
     ;;
+  timerdiag)
+    run_timerdiag
+    ;;
+  timersched)
+    run_timersched
+    ;;
   all)
     run_normal
     run_traps
     run_restore
     run_sched
     run_timerirq
+    run_timerdiag
+    run_timersched
     ;;
   -h|--help|help)
     usage

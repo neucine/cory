@@ -297,18 +297,22 @@ pub fn run_memory_map_tests(map: Layout): void {
     var saw_bitmap = false;
     var saw_heap = false;
     var saw_page_tables = false;
-    var saw_device_mmio = false;
+    var saw_device_mmio: usize = 0;
+    var saw_device_mmio2: usize = 0;
     while index < memory_map.count() {
         const region = memory_map.get(index);
         if region.start >= region.end {
             fail("selftest: memory map ordered range");
         }
         if region.kind == memory_map.kind_device_mmio {
-            if region.start != map.device_mmio_start {
-                fail("selftest: memory map mmio start");
-            }
-            if region.end != map.device_mmio_end {
-                fail("selftest: memory map mmio end");
+            if region.start == map.device_mmio_start and region.end == map.device_mmio_end {
+                saw_device_mmio = 1;
+            } else {
+                if map.device_mmio2_end > map.device_mmio2_start and region.start == map.device_mmio2_start and region.end == map.device_mmio2_end {
+                    saw_device_mmio2 = 1;
+                } else {
+                    fail("selftest: memory map mmio range");
+                }
             }
         } else {
             if region.start < map.ram_start {
@@ -357,7 +361,6 @@ pub fn run_memory_map_tests(map: Layout): void {
             }
         }
         if region.kind == memory_map.kind_device_mmio {
-            saw_device_mmio = true;
             if !memory_map.needs_identity_mapping(region.kind) {
                 fail("selftest: device mmio identity");
             }
@@ -381,8 +384,11 @@ pub fn run_memory_map_tests(map: Layout): void {
     if !saw_page_tables {
         fail("selftest: memory map page table region");
     }
-    if !saw_device_mmio {
+    if saw_device_mmio == 0 {
         fail("selftest: memory map device mmio region");
+    }
+    if map.device_mmio2_end > map.device_mmio2_start and saw_device_mmio2 == 0 {
+        fail("selftest: memory map device mmio2 region");
     }
 }
 

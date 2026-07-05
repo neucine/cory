@@ -3,31 +3,30 @@
 .global cory_arch_exception_vectors
 .type cory_arch_exception_vectors, %function
 
-.macro vector_slot
-    b cory_arch_exception_vector_entry
+.macro vector_slot target
+    b \target
     .balign 128
 .endm
 
 cory_arch_exception_vectors:
-    vector_slot
-    vector_slot
-    vector_slot
-    vector_slot
-    vector_slot
-    vector_slot
-    vector_slot
-    vector_slot
-    vector_slot
-    vector_slot
-    vector_slot
-    vector_slot
-    vector_slot
-    vector_slot
-    vector_slot
-    vector_slot
+    vector_slot cory_arch_exception_sync_vector_entry
+    vector_slot cory_arch_exception_irq_vector_entry
+    vector_slot cory_arch_exception_sync_vector_entry
+    vector_slot cory_arch_exception_sync_vector_entry
+    vector_slot cory_arch_exception_sync_vector_entry
+    vector_slot cory_arch_exception_irq_vector_entry
+    vector_slot cory_arch_exception_sync_vector_entry
+    vector_slot cory_arch_exception_sync_vector_entry
+    vector_slot cory_arch_exception_sync_vector_entry
+    vector_slot cory_arch_exception_irq_vector_entry
+    vector_slot cory_arch_exception_sync_vector_entry
+    vector_slot cory_arch_exception_sync_vector_entry
+    vector_slot cory_arch_exception_sync_vector_entry
+    vector_slot cory_arch_exception_irq_vector_entry
+    vector_slot cory_arch_exception_sync_vector_entry
+    vector_slot cory_arch_exception_sync_vector_entry
 
-.type cory_arch_exception_vector_entry, %function
-cory_arch_exception_vector_entry:
+.macro save_frame_and_call handler
     // TF_* constants are generated from arch/aarch64/trap_frame.cy via
     // `export asm const`, so the Cyna cstruct owns the frame layout.
     sub sp, sp, #TF_SIZE
@@ -58,10 +57,19 @@ cory_arch_exception_vector_entry:
     mrs x0, far_el1
     str x0, [sp, #TF_FAR_EL1]
     mov x0, sp
-    bl cory_arch_exception_entry
+    bl \handler
 1:
     wfe
     b 1b
+.endm
+
+.type cory_arch_exception_sync_vector_entry, %function
+cory_arch_exception_sync_vector_entry:
+    save_frame_and_call cory_arch_sync_exception_entry
+
+.type cory_arch_exception_irq_vector_entry, %function
+cory_arch_exception_irq_vector_entry:
+    save_frame_and_call cory_arch_irq_exception_entry
 
 .global cory_arch_exception_restore_from_frame
 .type cory_arch_exception_restore_from_frame, %function

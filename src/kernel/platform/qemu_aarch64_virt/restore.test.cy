@@ -28,7 +28,7 @@ pub fn init(): void {
     println("restoretest: vectors ready");
 }
 
-export c("cory_arch_exception_entry") fn cory_arch_exception_entry(raw_frame: *TrapFrame): void {
+export c("cory_arch_sync_exception_entry") fn cory_arch_sync_exception_entry(raw_frame: *TrapFrame): void {
     println("restoretest: trap aarch64");
     trap_frame.set_resume_state_in_frame(
         raw_frame,
@@ -38,6 +38,11 @@ export c("cory_arch_exception_entry") fn cory_arch_exception_entry(raw_frame: *T
     );
     trap_context.restore_from_frame(raw_frame);
     println("restoretest: restore returned unexpectedly");
+    panic_mod.panic();
+}
+
+export c("cory_arch_irq_exception_entry") fn cory_arch_irq_exception_entry(raw_frame: *TrapFrame): void {
+    println("restoretest: unexpected irq");
     panic_mod.panic();
 }
 
