@@ -1,4 +1,4 @@
-name = "cycor"
+name = "cory"
 src = "src"
 entry = "src/kernel/platform/qemu_aarch64_virt/main.cy"
 

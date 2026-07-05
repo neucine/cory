@@ -9,16 +9,16 @@ _start:
     mrs x0, CurrentEL
     lsr x0, x0, #2
     cmp x0, #1
-    b.eq cycor_aarch64_el1_entry
+    b.eq cory_aarch64_el1_entry
     cmp x0, #2
-    b.eq cycor_aarch64_enter_el1_from_el2
+    b.eq cory_aarch64_enter_el1_from_el2
 
 1:
     wfe
     b 1b
 
-.type cycor_aarch64_enter_el1_from_el2, %function
-cycor_aarch64_enter_el1_from_el2:
+.type cory_aarch64_enter_el1_from_el2, %function
+cory_aarch64_enter_el1_from_el2:
     ldr x0, =__stack_top
     msr sp_el1, x0
 
@@ -33,7 +33,7 @@ cycor_aarch64_enter_el1_from_el2:
 
     msr cptr_el2, xzr
 
-    ldr x0, =cycor_aarch64_el1_entry
+    ldr x0, =cory_aarch64_el1_entry
     msr elr_el2, x0
 
     mov x0, #0x3c5
@@ -41,9 +41,9 @@ cycor_aarch64_enter_el1_from_el2:
     isb
     eret
 
-.global cycor_aarch64_el1_entry
-.type cycor_aarch64_el1_entry, %function
-cycor_aarch64_el1_entry:
+.global cory_aarch64_el1_entry
+.type cory_aarch64_el1_entry, %function
+cory_aarch64_el1_entry:
     // First instruction in the normalized EL1 kernel contract. Whether QEMU
     // entered at EL1 directly or at EL2 and returned with eret, Cyna code starts
     // below this label and should not need to branch on CurrentEL.
@@ -59,15 +59,15 @@ cycor_aarch64_el1_entry:
     msr cpacr_el1, x0
     isb
 
-    bl cycor_kernel_entry
+    bl cory_kernel_entry
 
 1:
     wfe
     b 1b
 
-.global cycor_aarch64_activate_identity_vm
-.type cycor_aarch64_activate_identity_vm, %function
-cycor_aarch64_activate_identity_vm:
+.global cory_aarch64_activate_identity_vm
+.type cory_aarch64_activate_identity_vm, %function
+cory_aarch64_activate_identity_vm:
     // C ABI:
     //   x0 = TTBR0_EL1/TTBR1_EL1 root table address
     //   x1 = MAIR_EL1 value
@@ -93,9 +93,9 @@ cycor_aarch64_activate_identity_vm:
     isb
     ret
 
-.global cycor_aarch64_flush_kernel_tlb
-.type cycor_aarch64_flush_kernel_tlb, %function
-cycor_aarch64_flush_kernel_tlb:
+.global cory_aarch64_flush_kernel_tlb
+.type cory_aarch64_flush_kernel_tlb, %function
+cory_aarch64_flush_kernel_tlb:
     dsb ishst
     tlbi vmalle1
     dsb ish

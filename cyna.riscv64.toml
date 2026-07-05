@@ -1,4 +1,4 @@
-name = "cycor-riscv64"
+name = "cory-riscv64"
 src = "src"
 entry = "src/kernel/platform/qemu_riscv64_virt/main.cy"
 

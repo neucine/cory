@@ -1,4 +1,4 @@
-// AArch64 trap state has two layers in Cycor:
+// AArch64 trap state has two layers in Cory:
 //
 // - ExceptionDiagnosticFrame is the small state snapshot passed by the current
 //   panic-only vector path. It is enough to explain an unhandled exception.

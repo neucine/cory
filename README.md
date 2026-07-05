@@ -1,17 +1,17 @@
-# Cycor
+# Cory
 
-**Cycor** is pronounced **Sai-core**.
+**Cory** is pronounced **Sai-core**.
 
-Cycor is a Cyna-native capability kernel substrate designed to demonstrate Cyna's systems-programming capabilities and eventually serve as the operating substrate for Raspberry Pi Compute Module 5 based camera and imaging hardware.
+Cory is a Cyna-native capability kernel substrate designed to demonstrate Cyna's systems-programming capabilities and eventually serve as the operating substrate for Raspberry Pi Compute Module 5 based camera and imaging hardware.
 
-Cycor is not a Linux replacement, Unix clone, desktop OS, or general-purpose server OS. It is a small kernel substrate for controlled hardware, product-specific OS personalities, and imaging-oriented systems.
+Cory is not a Linux replacement, Unix clone, desktop OS, or general-purpose server OS. It is a small kernel substrate for controlled hardware, product-specific OS personalities, and imaging-oriented systems.
 
 ## Project identity
 
 ```text
 Neucine  — ecosystem / organization
 Cyna     — systems programming language
-Cycor    — Cyna-native kernel substrate
+Cory    — Cyna-native kernel substrate
 ```
 
 ## Canonical specification
@@ -45,7 +45,7 @@ exist when there is real code for that boundary.
 
 ## Initial target platforms
 
-Cycor has two hardware tracks:
+Cory has two hardware tracks:
 
 ```text
 Product track:  AArch64 / Raspberry Pi Compute Module 5
@@ -63,7 +63,7 @@ x86_64 support is optional and may be added later, but it is not the first targe
 
 ## MVP
 
-The first meaningful Cycor demo is not a shell.
+The first meaningful Cory demo is not a shell.
 
 It is a fake camera pipeline:
 
@@ -86,12 +86,12 @@ The pipeline should run across isolated userspace services, communicate through 
 Expected outputs:
 
 ```text
-build/cycor
-build/cycor.elf
-build/cycor.bin
-build/cycor-riscv64
-build/cycor-riscv64.elf
-build/cycor-riscv64.bin
+build/cory
+build/cory.elf
+build/cory.bin
+build/cory-riscv64
+build/cory-riscv64.elf
+build/cory-riscv64.bin
 ```
 
 The current kernel entries write to the QEMU `virt` UART, initialize exception
@@ -99,8 +99,8 @@ or trap vectors, run common bootstrap selftests through memory, VM, address
 spaces, and object/capability contracts, then halt. When QEMU is available, run:
 
 ```text
-qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cycor.elf
-qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cycor-riscv64.elf
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory.elf
+qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-riscv64.elf
 ```
 
 The common check/build/QEMU flows are wrapped by:
@@ -121,10 +121,10 @@ separate opt-in manifests:
 
 ```text
 ~/.cyna/0.1.8/bin/cyna build cyna.traptest.toml
-qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cycor-traptest.elf
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-traptest.elf
 
 ~/.cyna/0.1.8/bin/cyna build cyna.traptest.riscv64.toml
-qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cycor-traptest-riscv64.elf
+qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-traptest-riscv64.elf
 ```
 
 These images intentionally execute `brk` on AArch64 or `ebreak` on RISC-V64,

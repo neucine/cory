@@ -1,4 +1,4 @@
-// RISC-V trap state has two layers in Cycor:
+// RISC-V trap state has two layers in Cory:
 //
 // - TrapDiagnosticFrame is the small state snapshot passed by the current
 //   panic-only vector path. It is enough to explain an unhandled trap.

@@ -9,9 +9,9 @@ import .kernel.platform.qemu_riscv64_virt.vm_activation;
 import .kernel.memory.phys;
 import .kernel.memory.vm;
 
-extern c("cycor_riscv64_flush_kernel_tlb") fn flush_kernel_tlb(): void;
+extern c("cory_riscv64_flush_kernel_tlb") fn flush_kernel_tlb(): void;
 
-export c("cycor_heap_map_virtual_page") fn cycor_heap_map_virtual_page(virtual_addr: c_ulong): c_ulong {
+export c("cory_heap_map_virtual_page") fn cory_heap_map_virtual_page(virtual_addr: c_ulong): c_ulong {
     const phys_page = phys.alloc_page();
     if phys_page == 0 {
         return 0;
@@ -26,7 +26,7 @@ export c("cycor_heap_map_virtual_page") fn cycor_heap_map_virtual_page(virtual_a
     return phys_page as c_ulong;
 }
 
-export c("cycor_kernel_entry") fn cycor_kernel_entry(): void {
+export c("cory_kernel_entry") fn cory_kernel_entry(): void {
     entry.zero_bss();
     console.init();
     kernel.print_entry();

@@ -1,4 +1,4 @@
-name = "cycor-traptest-riscv64"
+name = "cory-traptest-riscv64"
 src = "src"
 entry = "src/kernel/platform/qemu_riscv64_virt/traptest.cy"
 

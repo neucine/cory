@@ -1,15 +1,15 @@
-# Cycor Specification
+# Cory Specification
 
 Status: draft  
-Project: Cycor  
+Project: Cory  
 Pronunciation: Sai-core  
-Repository: neucine/cycor
+Repository: neucine/cory
 
 See `docs/ARCHITECTURE.md` for the shorter source-layout and boot-flow map.
 
 ## Purpose
 
-Cycor is a Cyna-native capability kernel substrate.
+Cory is a Cyna-native capability kernel substrate.
 
 Its immediate purpose is to prove that Cyna can implement serious low-level
 systems software: freestanding boot, traps/exceptions, memory management,
@@ -19,13 +19,13 @@ orchestration.
 Its long-term product direction is a camera and imaging operating substrate for
 Raspberry Pi Compute Module 5 based hardware.
 
-Cycor is not a general-purpose operating system. It is the privileged substrate
+Cory is not a general-purpose operating system. It is the privileged substrate
 below userspace services and OS personalities. Camera policy, filesystem policy,
 display policy, and application behavior belong above the kernel.
 
 ## Direction
 
-Cycor grows bottom-up. Each layer must leave behind:
+Cory grows bottom-up. Each layer must leave behind:
 
 - a small working implementation
 - a selftest, boot check, or integration check
@@ -62,7 +62,7 @@ higher-level policy to compensate for a missing lower-level mechanism.
 
 ## Non-Goals
 
-Cycor is not:
+Cory is not:
 
 - a Linux replacement
 - a POSIX-first OS
@@ -152,7 +152,7 @@ General System Services
     Resource Manager
     Security Policy Service
 
-Cycor Kernel Core
+Cory Kernel Core
     Kernel Objects
     Capabilities
     Address Spaces
@@ -215,7 +215,7 @@ Rules:
   return scalar values in the ABI return register, preserve callee-saved
   registers, and use the target ABI return instruction.
 
-Portability is a first-class requirement because Cycor has two tracks:
+Portability is a first-class requirement because Cory has two tracks:
 
 | Track | Target | Purpose |
 |---|---|---|
@@ -224,11 +224,11 @@ Portability is a first-class requirement because Cycor has two tracks:
 
 Both QEMU targets should keep boot checks working. Platform parity bugs are
 valuable because they reveal hidden assumptions in Cyna, the linker, runtime
-builtins, or Cycor's architecture split.
+builtins, or Cory's architecture split.
 
 ## Privilege-State Model
 
-Cycor has one privileged kernel contract per architecture:
+Cory has one privileged kernel contract per architecture:
 
 | Architecture | Kernel contract | Current entry path |
 |---|---|---|
@@ -239,11 +239,11 @@ Common Cyna kernel code starts after this normalization. It should not branch on
 raw architecture privilege state. Architecture code owns the transition into the
 kernel contract and must leave behind small, documented entry labels:
 
-- AArch64: `cycor_aarch64_el1_entry` is the first normalized EL1 entry point.
-- RISC-V64: `cycor_riscv64_s_entry` is the first S-mode kernel entry point.
+- AArch64: `cory_aarch64_el1_entry` is the first normalized EL1 entry point.
+- RISC-V64: `cory_riscv64_s_entry` is the first S-mode kernel entry point.
 
 The current RISC-V path intentionally assumes a machine-mode firmware contract
-equivalent to QEMU `-bios none`: Cycor owns the M-mode setup long enough to open
+equivalent to QEMU `-bios none`: Cory owns the M-mode setup long enough to open
 PMP and delegate basic traps. A future firmware/SBI boot path should be a
 separate platform entry path, not an implicit change to common RISC-V code.
 
@@ -262,7 +262,7 @@ common kernel code runs.
 
 ## Trap-State Model
 
-Cycor separates panic diagnostics from recoverable trap frames.
+Cory separates panic diagnostics from recoverable trap frames.
 
 The current boot-stage vectors are panic-only. They capture a diagnostic frame
 and call into Cyna with C ABI carrier values:
@@ -299,10 +299,10 @@ Current implementation status:
 
 Cyna pressure point:
 
-- Cycor uses Cyna's `comptime` C ABI metadata operator to publish
+- Cory uses Cyna's `comptime` C ABI metadata operator to publish
   `TrapFrame.size`, `TrapFrame.align`, and `TrapFrame.field.name.offset`
   constants from each architecture trap-frame module.
-- Cycor uses Cyna's `export asm const` declarations in those same modules to
+- Cory uses Cyna's `export asm const` declarations in those same modules to
   emit the `TF_*` constants consumed by architecture assembly. This makes the
   Cyna `cstruct` the source of truth for trap-frame offsets.
 - Each architecture `trap_frame.cy` module has a boot-time `verify_layout`
@@ -311,7 +311,7 @@ Cyna pressure point:
 - RISC-V64 reserves 288 bytes in assembly for trap-stack alignment, while the
   C ABI `TrapFrame` payload is 280 bytes. The final 8 bytes are stack padding,
   not Cyna-visible struct storage.
-- Remaining Cyna gap: static assertions are not available yet, so Cycor still
+- Remaining Cyna gap: static assertions are not available yet, so Cory still
   keeps a boot-time `verify_layout` guard for human-readable diagnostics.
 
 Normal boot must never depend on deliberately taking a trap. Diagnostic trap
@@ -324,7 +324,7 @@ Those images are expected to print the diagnostic frame and then panic.
 
 ## Privilege-Mode Decision
 
-Cycor should run the kernel in the normal OS privilege level for each
+Cory should run the kernel in the normal OS privilege level for each
 architecture:
 
 - AArch64 kernel mode: EL1
@@ -636,7 +636,7 @@ Near-term VM goals:
 
 ## Kernel Object and Capability Model
 
-Cycor's native authority model is capability-based.
+Cory's native authority model is capability-based.
 
 A capability answers:
 
@@ -1256,7 +1256,7 @@ Deliverables:
 Goal:
 
 ```text
-Demonstrate Cycor's product direction without real camera hardware.
+Demonstrate Cory's product direction without real camera hardware.
 ```
 
 Services:
@@ -1302,27 +1302,27 @@ interrupt-controller instance, and boot-device quirks.
 
 ### AArch64
 
-64-bit Arm architecture. Cycor's primary product architecture because Raspberry
+64-bit Arm architecture. Cory's primary product architecture because Raspberry
 Pi CM5 is Arm-based.
 
 ### RISC-V64
 
-64-bit RISC-V architecture. Cycor's research architecture for portability and
+64-bit RISC-V architecture. Cory's research architecture for portability and
 Cyna backend validation.
 
 ### Cyna
 
-The systems programming language in the Neucine ecosystem. Cycor is intended to
+The systems programming language in the Neucine ecosystem. Cory is intended to
 be written primarily in Cyna.
 
 ### C ABI Carrier Type
 
 A type that Cyna permits directly at an `extern c` or `export c` boundary, such
 as `c_int`, `c_ulong`, `c_size_t`, `cstr`, raw pointers, and C-layout structs.
-Kernel-native types such as `usize` should stay inside Cycor's Cyna modules
+Kernel-native types such as `usize` should stay inside Cory's Cyna modules
 unless Cyna explicitly makes them C ABI boundary types.
 
-### Cycor
+### Cory
 
 Pronounced Sai-core. A Cyna-native capability kernel substrate for language
 demonstration and future camera/imaging hardware.

@@ -1,7 +1,7 @@
 import .kernel.panic as panic_mod;
 
 pub fn print_entry(): void {
-    println("cycor: kernel entry");
+    println("cory: kernel entry");
 }
 
 pub fn print_memory_ready(): void {

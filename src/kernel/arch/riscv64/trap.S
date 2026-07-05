@@ -1,9 +1,9 @@
 .section .text.trap, "ax"
 .balign 4
-.global cycor_arch_trap_vector
-.type cycor_arch_trap_vector, @function
+.global cory_arch_trap_vector
+.type cory_arch_trap_vector, @function
 
-cycor_arch_trap_vector:
+cory_arch_trap_vector:
     # TF_* constants are generated from arch/riscv64/trap_frame.cy via
     # `export asm const`, so the Cyna cstruct owns the frame layout.
     addi sp, sp, -TF_SIZE
@@ -48,30 +48,30 @@ cycor_arch_trap_vector:
     csrr t0, stval
     sd t0, TF_STVAL(sp)
     mv a0, sp
-    call cycor_arch_trap_entry
+    call cory_arch_trap_entry
 1:
     wfi
     j 1b
 
-.global cycor_arch_trap_init
-.type cycor_arch_trap_init, @function
-cycor_arch_trap_init:
-    la t0, cycor_arch_trap_vector
+.global cory_arch_trap_init
+.type cory_arch_trap_init, @function
+cory_arch_trap_init:
+    la t0, cory_arch_trap_vector
     csrw stvec, t0
     ret
 
-.global cycor_arch_abi_probe_value
-.type cycor_arch_abi_probe_value, @function
-cycor_arch_abi_probe_value:
-    # C ABI: c_ulong cycor_arch_abi_probe_value(void)
+.global cory_arch_abi_probe_value
+.type cory_arch_abi_probe_value, @function
+cory_arch_abi_probe_value:
+    # C ABI: c_ulong cory_arch_abi_probe_value(void)
     # Returns a fixed scalar in a0 so Cyna can verify extern c return lowering.
     li a0, 12648430
     ret
 
-.global cycor_arch_trigger_test_trap
-.type cycor_arch_trigger_test_trap, @function
-cycor_arch_trigger_test_trap:
-    # C ABI: void cycor_arch_trigger_test_trap(void)
+.global cory_arch_trigger_test_trap
+.type cory_arch_trigger_test_trap, @function
+cory_arch_trigger_test_trap:
+    # C ABI: void cory_arch_trigger_test_trap(void)
     # Opt-in trap-test entry point. Normal boot manifests do not call it.
     ebreak
     ret

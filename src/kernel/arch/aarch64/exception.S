@@ -1,14 +1,14 @@
 .section .text.exception, "ax"
 .balign 2048
-.global cycor_arch_exception_vectors
-.type cycor_arch_exception_vectors, %function
+.global cory_arch_exception_vectors
+.type cory_arch_exception_vectors, %function
 
 .macro vector_slot
-    b cycor_arch_exception_vector_entry
+    b cory_arch_exception_vector_entry
     .balign 128
 .endm
 
-cycor_arch_exception_vectors:
+cory_arch_exception_vectors:
     vector_slot
     vector_slot
     vector_slot
@@ -26,8 +26,8 @@ cycor_arch_exception_vectors:
     vector_slot
     vector_slot
 
-.type cycor_arch_exception_vector_entry, %function
-cycor_arch_exception_vector_entry:
+.type cory_arch_exception_vector_entry, %function
+cory_arch_exception_vector_entry:
     // TF_* constants are generated from arch/aarch64/trap_frame.cy via
     // `export asm const`, so the Cyna cstruct owns the frame layout.
     sub sp, sp, #TF_SIZE
@@ -58,41 +58,41 @@ cycor_arch_exception_vector_entry:
     mrs x0, far_el1
     str x0, [sp, #TF_FAR_EL1]
     mov x0, sp
-    bl cycor_arch_exception_entry
+    bl cory_arch_exception_entry
 1:
     wfe
     b 1b
 
-.global cycor_arch_exception_init
-.type cycor_arch_exception_init, %function
-cycor_arch_exception_init:
-    adrp x0, cycor_arch_exception_vectors
-    add x0, x0, :lo12:cycor_arch_exception_vectors
+.global cory_arch_exception_init
+.type cory_arch_exception_init, %function
+cory_arch_exception_init:
+    adrp x0, cory_arch_exception_vectors
+    add x0, x0, :lo12:cory_arch_exception_vectors
     msr vbar_el1, x0
     isb
     ret
 
-.global cycor_arch_abi_probe_value
-.type cycor_arch_abi_probe_value, %function
-cycor_arch_abi_probe_value:
-    // C ABI: c_ulong cycor_arch_abi_probe_value(void)
+.global cory_arch_abi_probe_value
+.type cory_arch_abi_probe_value, %function
+cory_arch_abi_probe_value:
+    // C ABI: c_ulong cory_arch_abi_probe_value(void)
     // Returns a fixed scalar in x0 so Cyna can verify extern c return lowering.
     movz x0, #0xffee
     movk x0, #0xc0, lsl #16
     ret
 
-.global cycor_arch_current_el
-.type cycor_arch_current_el, %function
-cycor_arch_current_el:
-    // C ABI: c_ulong cycor_arch_current_el(void)
+.global cory_arch_current_el
+.type cory_arch_current_el, %function
+cory_arch_current_el:
+    // C ABI: c_ulong cory_arch_current_el(void)
     mrs x0, CurrentEL
     lsr x0, x0, #2
     ret
 
-.global cycor_arch_trigger_test_trap
-.type cycor_arch_trigger_test_trap, %function
-cycor_arch_trigger_test_trap:
-    // C ABI: void cycor_arch_trigger_test_trap(void)
+.global cory_arch_trigger_test_trap
+.type cory_arch_trigger_test_trap, %function
+cory_arch_trigger_test_trap:
+    // C ABI: void cory_arch_trigger_test_trap(void)
     // Opt-in trap-test entry point. Normal boot manifests do not call it.
     brk #0
     ret

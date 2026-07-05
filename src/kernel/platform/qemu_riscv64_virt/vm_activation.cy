@@ -1,6 +1,6 @@
 import .kernel.arch.riscv64.page_table;
 
-extern c("cycor_riscv64_activate_identity_vm") fn arch_activate_identity_vm(satp: c_ulong): void;
+extern c("cory_riscv64_activate_identity_vm") fn arch_activate_identity_vm(satp: c_ulong): void;
 
 // QEMU virt RISC-V64 owns the final SATP switch because the assembly symbol is
 // target-local. Page-table geometry and SATP construction stay in arch code;

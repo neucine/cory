@@ -13,7 +13,7 @@ pub const status_virtual_map_failed: i32 = 8;
 
 const max_usize: usize = 0 - 1;
 
-extern c("cycor_heap_map_virtual_page") fn heap_map_virtual_page(virtual_addr: c_ulong): c_ulong;
+extern c("cory_heap_map_virtual_page") fn heap_map_virtual_page(virtual_addr: c_ulong): c_ulong;
 
 pub struct HeapSnapshot {
     pub page_size: usize;
