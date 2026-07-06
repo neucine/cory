@@ -82,7 +82,8 @@ Cory currently boots both QEMU targets into kernel selftests:
 - Both targets initialize trap vectors, capture full trap frames, and expose
   resume-state helpers.
 - AArch64 separates synchronous exception and IRQ vector callbacks while
-  preserving one trap-frame layout; normal boot exports a panic-only IRQ entry.
+  preserving one trap-frame layout; normal boot can return from a handled
+  diagnostic timer IRQ.
 - Memory bootstrap, bootstrap page tables, physical pages, heap, address-space
   metadata, kernel object IDs, capabilities, process metadata, thread metadata,
   and scheduler metadata all have boot-time selftests.
@@ -91,9 +92,9 @@ Cory currently boots both QEMU targets into kernel selftests:
   dry-run diagnostic tick and a timer-IRQ-driven scheduler handoff in opt-in
   probes.
 - Timer groundwork exists on both targets; AArch64 also proves masked deadline
-  programming, configures the virtual timer IRQ route with IRQs masked, keeps a
-  default-disabled tick delivery policy, and validates diagnostic virtual timer
-  IRQ delivery through QEMU `virt` GICv2 INTID 27.
+  programming, configures the virtual timer IRQ route, enables one-shot
+  diagnostic tick delivery, and validates virtual timer IRQ delivery through
+  QEMU `virt` GICv2 INTID 27.
 
 Still intentionally missing: normal timer-driven preemption, a real scheduler
 loop, userspace entry, syscalls, IPC, and shared buffers.
@@ -121,9 +122,10 @@ build/cory-riscv64.bin
 
 The current kernel entries write to the QEMU `virt` UART, initialize exception
 or trap vectors, verify readable timer counters plus masked AArch64 deadline
-programming, configure the AArch64 timer IRQ route with IRQs still masked and
-tick delivery disabled, run common bootstrap selftests through memory, VM,
-address spaces, and object/capability contracts, then halt.
+programming, configure the AArch64 timer IRQ route, receive and return from a
+one-shot diagnostic AArch64 tick without scheduling, run common bootstrap
+selftests through memory, VM, address spaces, and object/capability contracts,
+then halt.
 When QEMU is available, run:
 
 ```text
@@ -200,7 +202,8 @@ tools/check.sh timerirq-aarch64
 
 It configures the virtual timer PPI, unmasks IRQs, receives INTID 27, disarms
 the timer, prints `timerirqtest: received virtual timer irq`, then intentionally
-panics. This is still diagnostic-only; normal boot does not enable timer IRQs.
+panics. This is still diagnostic-only; normal boot only enables a one-shot
+diagnostic tick and does not schedule from timer IRQs.
 
 ## Diagnostic tick probe
 

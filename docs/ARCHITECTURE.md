@@ -143,14 +143,16 @@ proofs, but not yet through normal preemption:
   select a ready thread, write selected resume state, and restore into that
   thread.
 - AArch64 normal boot proves readable counters and masked virtual timer
-  deadline programming, then configures the virtual timer IRQ route while IRQs
-  remain masked. RISC-V64 normal boot proves S-mode `time` readability.
+  deadline programming, then configures the virtual timer IRQ route and receives
+  a one-shot diagnostic tick. RISC-V64 normal boot proves S-mode `time`
+  readability.
 - The AArch64 platform interrupt module owns IRQ mask/unmask, GICv2
   acknowledge/EOI, and virtual timer IRQ completion helpers.
 - The AArch64 tick policy module owns timer tick delivery state. Normal boot
-  defaults delivery to disabled; opt-in probes exercise diagnostic delivery and
-  scheduler consumption separately.
-- Normal AArch64 boot exports an explicit panic-only IRQ entrypoint.
+  enables diagnostic delivery; opt-in probes still exercise scheduler
+  consumption separately.
+- Normal AArch64 boot exports an explicit IRQ entrypoint that handles diagnostic
+  timer ticks and remains panic-only for unexpected IRQs.
 - The AArch64 timer IRQ probe configures QEMU `virt` GICv2 through the
   interrupt module, receives virtual timer INTID 27, disarms the timer, and EOIs
   the interrupt.
@@ -164,17 +166,17 @@ proofs, but not yet through normal preemption:
   explicit machine-timer ownership decision before it grows probes.
 
 The important boundary: timer-driven scheduling is still diagnostic-only.
-Normal boot configures the AArch64 timer IRQ route, but does not unmask IRQs and
-keeps tick delivery disabled.
+Normal boot handles a diagnostic AArch64 timer tick, but does not schedule from
+timer IRQs.
 
 ## Subsystem Direction
 
 Near-term work should make existing layers easier to reason about before moving
 up to scheduler/userspace:
 
-- keep normal boot panic-only until interrupt scheduling is boring in probes
-- decide whether normal boot should first unmask only diagnostic ticks or wait
-  for scheduler policy
+- keep normal synchronous trap handling panic-only until recoverable trap
+  dispatch has a real caller
+- decide when diagnostic tick delivery should hand off to scheduler policy
 - specify whether RISC-V timer delivery uses the current Cory-owned M-mode shim
   or a separate SBI-style platform entry, then add the matching RISC-V timer
   interrupt probe

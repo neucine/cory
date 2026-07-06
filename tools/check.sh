@@ -108,7 +108,7 @@ run_probe() {
 run_aarch64() {
   "$CYNA" check .
   "$CYNA" build .
-  run_qemu_expect aarch64 "tick: delivery disabled" "memory: physical pages ready" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory.elf
+  run_qemu_expect aarch64 "tick: diagnostic tick" "memory: physical pages ready" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory.elf
 }
 
 run_riscv64() {

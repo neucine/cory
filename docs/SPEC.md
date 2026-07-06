@@ -1029,15 +1029,15 @@ Current status:
   machine-timer handoff, CLINT programming policy, or SBI-style timer call.
 - AArch64 platform interrupt glue centralizes IRQ mask/unmask, GICv2
   acknowledge/EOI, virtual timer IRQ setup, and timer IRQ completion. Normal
-  boot exports a panic-only IRQ entrypoint, configures the virtual timer IRQ
-  route, and leaves IRQs masked.
+  boot exports an IRQ entrypoint, configures the virtual timer IRQ route, and
+  can return from a handled diagnostic timer tick.
 - AArch64 tick delivery policy exists as explicit platform state. Normal boot
-  initializes delivery disabled; opt-in probes exercise diagnostic delivery and
-  scheduler consumption separately.
+  enables one-shot diagnostic delivery; opt-in probes exercise scheduler
+  consumption separately.
 - An opt-in AArch64 timer IRQ probe configures the QEMU `virt` GICv2 virtual
   timer PPI through that interrupt module, unmasks IRQs, receives INTID 27,
-  disarms the timer, and panics intentionally. Normal boot still leaves timer
-  IRQs disabled.
+  disarms the timer, and panics intentionally. Normal boot handles the same
+  timer IRQ class only as a diagnostic tick.
 - An opt-in AArch64 diagnostic tick probe enables dry-run tick delivery,
   receives INTID 27, completes the timer IRQ, and panics intentionally without
   scheduling.
@@ -1045,8 +1045,9 @@ Current status:
   receives INTID 27, disarms and EOIs the interrupt, schedules a ready kernel
   thread from the saved trap frame, and restores with `eret`. Normal boot still
   leaves timer-driven preemption disabled.
-- Current next kernel slice: specify and probe the RISC-V64 timer ownership
-  path without forcing it into the AArch64 GIC/tick shape.
+- Current next kernel slice: decide when AArch64 diagnostic tick delivery should
+  hand off to scheduler policy, or specify and probe the RISC-V64 timer
+  ownership path without forcing it into the AArch64 GIC/tick shape.
 - Cyna gaps identified by kernel slotmap work were reproduced and fixed
   upstream: mutable references to module globals work for this path, and
   freestanding aggregate lowering has memory helper support.

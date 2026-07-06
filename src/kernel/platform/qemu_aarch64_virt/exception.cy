@@ -1,4 +1,5 @@
 import .kernel.arch.aarch64.trap_frame;
+import .kernel.arch.aarch64.trap_context;
 import { TrapFrame } from .kernel.arch.aarch64.trap_frame;
 import .kernel.console;
 import .kernel.panic as panic_mod;
@@ -60,6 +61,18 @@ export c("cory_arch_sync_exception_entry") fn cory_arch_sync_exception_entry(raw
 
 export c("cory_arch_irq_exception_entry") fn cory_arch_irq_exception_entry(raw_frame: *TrapFrame): void {
     interrupt.mask();
+    const intid = interrupt.acknowledge();
+    if tick.diagnostic_enabled() {
+        if interrupt.complete_timer_irq(intid) {
+            const count = tick.record_delivery();
+            if count == 1 {
+                println("tick: diagnostic tick");
+            }
+            trap_context.restore_from_frame(raw_frame);
+        }
+    } else if intid != interrupt.spurious_intid {
+        interrupt.end(intid);
+    }
     println("exception: unhandled aarch64 irq");
     if !tick.delivery_enabled() {
         println("exception: tick delivery disabled");

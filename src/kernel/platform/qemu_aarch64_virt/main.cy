@@ -51,7 +51,13 @@ export c("cory_kernel_entry") fn cory_kernel_entry(): void {
     interrupt.mask();
     interrupt.init_timer_irq();
     println("interrupt: timer irq configured");
-    println("tick: delivery disabled");
+    tick.set_diagnostic();
+    if !interrupt.program_timer_after_ticks(timer.frequency() / 100) {
+        println("tick: diagnostic program failed");
+        panic_mod.panic();
+    }
+    println("tick: diagnostic enabled");
+    interrupt.unmask();
     const map = memory.layout();
     bootstrap.prepare_memory(map, page_table.spec(), page_table.arch_id);
     vm_activation.activate_identity_vm(vm.bootstrap_plan(map, page_table.spec()).page_table_root);
