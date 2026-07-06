@@ -143,14 +143,15 @@ proofs, but not yet through normal preemption:
   select a ready thread, write selected resume state, and restore into that
   thread.
 - AArch64 normal boot proves readable counters and masked virtual timer
-  deadline programming, then configures the virtual timer IRQ route and receives
-  a one-shot diagnostic tick. RISC-V64 normal boot proves S-mode `time`
+  deadline programming, then configures the virtual timer IRQ route and enables
+  one-shot scheduler tick mode with an empty-queue idle fallback. RISC-V64
+  normal boot proves S-mode `time`
   readability.
 - The AArch64 platform interrupt module owns IRQ mask/unmask, GICv2
   acknowledge/EOI, and virtual timer IRQ completion helpers.
 - The AArch64 tick policy module owns timer tick delivery state. Normal boot
-  enables diagnostic delivery; opt-in probes still exercise scheduler
-  consumption separately.
+  enables scheduler delivery; an empty run queue records an idle scheduler tick
+  and restores the interrupted frame without switching.
 - Normal AArch64 boot exports an explicit IRQ entrypoint that handles diagnostic
   timer ticks, can hand enabled scheduler ticks to the target-local
   schedule-and-restore path, and remains panic-only for unexpected IRQs.
@@ -168,9 +169,9 @@ proofs, but not yet through normal preemption:
   through Cory's M-mode shim, so the matching timer interrupt path needs an
   explicit machine-timer ownership decision before it grows probes.
 
-The important boundary: timer-driven scheduling is still diagnostic-only.
-Normal boot handles a diagnostic AArch64 timer tick, but does not schedule from
-timer IRQs.
+The important boundary: normal AArch64 boot can run with scheduler tick mode
+enabled, but only one-shot delivery is programmed and there is no normal-boot
+runnable workload yet.
 
 ## Subsystem Direction
 
@@ -179,8 +180,8 @@ up to scheduler/userspace:
 
 - keep normal synchronous trap handling panic-only until recoverable trap
   dispatch has a real caller
-- decide when normal boot should switch from diagnostic tick delivery to
-  scheduler tick delivery
+- decide whether the next AArch64 slice should add periodic reprogramming or a
+  normal-boot runnable workload
 - specify whether RISC-V timer delivery uses the current Cory-owned M-mode shim
   or a separate SBI-style platform entry, then add the matching RISC-V timer
   interrupt probe

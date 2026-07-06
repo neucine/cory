@@ -82,8 +82,8 @@ Cory currently boots both QEMU targets into kernel selftests:
 - Both targets initialize trap vectors, capture full trap frames, and expose
   resume-state helpers.
 - AArch64 separates synchronous exception and IRQ vector callbacks while
-  preserving one trap-frame layout; normal boot can return from a handled
-  diagnostic timer IRQ.
+  preserving one trap-frame layout; normal boot enables scheduler tick mode and
+  returns from an idle scheduler tick when no ready thread is queued.
 - Memory bootstrap, bootstrap page tables, physical pages, heap, address-space
   metadata, kernel object IDs, capabilities, process metadata, thread metadata,
   and scheduler metadata all have boot-time selftests.
@@ -93,11 +93,12 @@ Cory currently boots both QEMU targets into kernel selftests:
   IRQ handler's scheduler tick branch in opt-in probes.
 - Timer groundwork exists on both targets; AArch64 also proves masked deadline
   programming, configures the virtual timer IRQ route, enables one-shot
-  diagnostic tick delivery, and validates virtual timer IRQ delivery through
-  QEMU `virt` GICv2 INTID 27.
+  scheduler tick delivery, and validates virtual timer IRQ delivery through QEMU
+  `virt` GICv2 INTID 27.
 
-Still intentionally missing: normal timer-driven preemption, a real scheduler
-loop, userspace entry, syscalls, IPC, and shared buffers.
+Still intentionally missing: periodic timer-driven preemption, a real scheduler
+loop with runnable work in normal boot, userspace entry, syscalls, IPC, and
+shared buffers.
 
 ## Build
 
@@ -122,10 +123,10 @@ build/cory-riscv64.bin
 
 The current kernel entries write to the QEMU `virt` UART, initialize exception
 or trap vectors, verify readable timer counters plus masked AArch64 deadline
-programming, configure the AArch64 timer IRQ route, receive and return from a
-one-shot diagnostic AArch64 tick without scheduling, run common bootstrap
-selftests through memory, VM, address spaces, and object/capability contracts,
-then halt.
+programming, configure the AArch64 timer IRQ route, enable one-shot scheduler
+tick mode, return from an idle scheduler tick when no ready thread is queued,
+run common bootstrap selftests through memory, VM, address spaces, and
+object/capability contracts, then halt.
 When QEMU is available, run:
 
 ```text
@@ -203,8 +204,7 @@ tools/check.sh timerirq-aarch64
 
 It configures the virtual timer PPI, unmasks IRQs, receives INTID 27, disarms
 the timer, prints `timerirqtest: received virtual timer irq`, then intentionally
-panics. This is still diagnostic-only; normal boot only enables a one-shot
-diagnostic tick and does not schedule from timer IRQs.
+panics. Normal boot uses the same timer IRQ class for one-shot scheduler ticks.
 
 ## Diagnostic tick probe
 
@@ -230,7 +230,7 @@ tools/check.sh timersched-aarch64
 It creates a ready kernel thread, programs the virtual timer, receives INTID 27,
 disarms and EOIs the timer interrupt, schedules the ready thread from the saved
 trap frame, restores with `eret`, prints `timerschedtest: thread b resumed`,
-then intentionally panics. Normal boot still does not enable preemption.
+then intentionally panics.
 
 ## Normal IRQ scheduler probe
 
@@ -244,4 +244,5 @@ tools/check.sh normalsched-aarch64
 It creates a ready kernel thread, enables scheduler tick delivery, receives the
 virtual timer IRQ through `exception.cy`, schedules from the saved trap frame,
 prints `tick: scheduler tick` and `normalschedtest: thread b resumed`, then
-intentionally panics. Normal boot still runs diagnostic tick delivery only.
+intentionally panics. Normal boot enables the same scheduler tick mode, but
+falls back to `tick: scheduler idle` when no ready thread is queued.

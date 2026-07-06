@@ -51,12 +51,12 @@ export c("cory_kernel_entry") fn cory_kernel_entry(): void {
     interrupt.mask();
     interrupt.init_timer_irq();
     println("interrupt: timer irq configured");
-    tick.set_diagnostic();
+    tick.set_enabled();
     if !interrupt.program_timer_after_ticks(timer.frequency() / 100) {
-        println("tick: diagnostic program failed");
+        println("tick: scheduler program failed");
         panic_mod.panic();
     }
-    println("tick: diagnostic enabled");
+    println("tick: scheduler enabled");
     interrupt.unmask();
     const map = memory.layout();
     bootstrap.prepare_memory(map, page_table.spec(), page_table.arch_id);

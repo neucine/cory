@@ -5,6 +5,7 @@ import .kernel.console;
 import .kernel.panic as panic_mod;
 import .kernel.platform.qemu_aarch64_virt.interrupt;
 import .kernel.platform.qemu_aarch64_virt.tick;
+import .kernel.task.scheduler;
 
 extern c("cory_arch_exception_init") fn cory_arch_exception_init(): void;
 extern c("cory_arch_abi_probe_value") fn cory_arch_abi_probe_value(): c_ulong;
@@ -73,6 +74,12 @@ export c("cory_arch_irq_exception_entry") fn cory_arch_irq_exception_entry(raw_f
     } else if tick.enabled() {
         if interrupt.complete_timer_irq(intid) {
             const count = tick.record_delivery();
+            if scheduler.count() == 0 {
+                if count == 1 {
+                    println("tick: scheduler idle");
+                }
+                trap_context.restore_from_frame(raw_frame);
+            }
             if count == 1 {
                 println("tick: scheduler tick");
             }
