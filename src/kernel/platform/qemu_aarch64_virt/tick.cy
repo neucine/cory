@@ -2,6 +2,8 @@ pub const mode_disabled = 0;
 pub const mode_diagnostic = 1;
 pub const mode_enabled = 2;
 
+pub const ticks_per_second = 100;
+
 var current: usize = mode_disabled;
 var delivered: usize = 0;
 
@@ -43,4 +45,12 @@ pub fn record_delivery(): usize {
 
 pub fn delivered_count(): usize {
     return delivered;
+}
+
+pub fn interval_ticks(timer_frequency: usize): usize {
+    var interval = timer_frequency / ticks_per_second;
+    if interval == 0 {
+        interval = 1;
+    }
+    return interval;
 }

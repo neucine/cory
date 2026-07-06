@@ -74,6 +74,10 @@ export c("cory_arch_irq_exception_entry") fn cory_arch_irq_exception_entry(raw_f
     } else if tick.enabled() {
         if interrupt.complete_timer_irq(intid) {
             const count = tick.record_delivery();
+            if !interrupt.program_timer_after_ticks(tick.interval_ticks(interrupt.timer_frequency())) {
+                println("exception: scheduler tick rearm failed");
+                panic_mod.panic();
+            }
             if scheduler.count() == 0 {
                 if count == 1 {
                     println("tick: scheduler idle");

@@ -52,7 +52,7 @@ export c("cory_kernel_entry") fn cory_kernel_entry(): void {
     interrupt.init_timer_irq();
     println("interrupt: timer irq configured");
     tick.set_enabled();
-    if !interrupt.program_timer_after_ticks(timer.frequency() / 100) {
+    if !interrupt.program_timer_after_ticks(tick.interval_ticks(timer.frequency())) {
         println("tick: scheduler program failed");
         panic_mod.panic();
     }

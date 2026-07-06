@@ -144,7 +144,7 @@ proofs, but not yet through normal preemption:
   thread.
 - AArch64 normal boot proves readable counters and masked virtual timer
   deadline programming, then configures the virtual timer IRQ route and enables
-  one-shot scheduler tick mode with an empty-queue idle fallback. RISC-V64
+  periodic scheduler tick mode with an empty-queue idle fallback. RISC-V64
   normal boot proves S-mode `time`
   readability.
 - The AArch64 platform interrupt module owns IRQ mask/unmask, GICv2
@@ -170,8 +170,8 @@ proofs, but not yet through normal preemption:
   explicit machine-timer ownership decision before it grows probes.
 
 The important boundary: normal AArch64 boot can run with scheduler tick mode
-enabled, but only one-shot delivery is programmed and there is no normal-boot
-runnable workload yet.
+enabled and periodically rearmed, but there is no normal-boot runnable workload
+yet.
 
 ## Subsystem Direction
 
@@ -180,8 +180,8 @@ up to scheduler/userspace:
 
 - keep normal synchronous trap handling panic-only until recoverable trap
   dispatch has a real caller
-- decide whether the next AArch64 slice should add periodic reprogramming or a
-  normal-boot runnable workload
+- decide whether the next AArch64 slice should add a normal-boot runnable
+  workload or move sideways to RISC-V timer ownership
 - specify whether RISC-V timer delivery uses the current Cory-owned M-mode shim
   or a separate SBI-style platform entry, then add the matching RISC-V timer
   interrupt probe

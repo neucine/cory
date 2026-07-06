@@ -19,6 +19,10 @@ pub fn init_timer_irq(): void {
     gic.init_timer_irq();
 }
 
+pub fn timer_frequency(): usize {
+    return timer.frequency();
+}
+
 pub fn program_timer_after_ticks(delta: usize): bool {
     return timer.program_irq_after_ticks(delta);
 }

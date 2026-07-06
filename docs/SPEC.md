@@ -1033,7 +1033,7 @@ Current status:
   boot exports an IRQ entrypoint, configures the virtual timer IRQ route, and
   can return from an idle scheduler tick.
 - AArch64 tick delivery policy exists as explicit platform state. Normal boot
-  enables one-shot scheduler delivery; an empty run queue records an idle
+  enables periodic scheduler delivery; an empty run queue records an idle
   scheduler tick and restores the interrupted frame without switching.
 - An opt-in AArch64 timer IRQ probe configures the QEMU `virt` GICv2 virtual
   timer PPI through that interrupt module, unmasks IRQs, receives INTID 27,
@@ -1048,10 +1048,9 @@ Current status:
 - An opt-in AArch64 normal IRQ scheduler probe sends an enabled timer tick
   through the normal platform IRQ entrypoint, which completes the IRQ and calls
   the target-local schedule-and-restore path.
-- Current next kernel slice: decide whether AArch64 should add periodic timer
-  reprogramming or a normal-boot runnable workload, or specify and probe the
-  RISC-V64 timer ownership path without forcing it into the AArch64 GIC/tick
-  shape.
+- Current next kernel slice: decide whether AArch64 should add a normal-boot
+  runnable workload or move sideways to specify and probe the RISC-V64 timer
+  ownership path without forcing it into the AArch64 GIC/tick shape.
 - Cyna gaps identified by kernel slotmap work were reproduced and fixed
   upstream: mutable references to module globals work for this path, and
   freestanding aggregate lowering has memory helper support.
