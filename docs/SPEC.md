@@ -2,7 +2,7 @@
 
 Status: draft  
 Project: Cory  
-Pronunciation: Sai-core  
+Pronunciation: Core-ry
 Repository: neucine/cory
 
 See `docs/ARCHITECTURE.md` for the shorter source-layout and boot-flow map.
@@ -1415,7 +1415,7 @@ unless Cyna explicitly makes them C ABI boundary types.
 
 ### Cory
 
-Pronounced Sai-core. A Cyna-native capability kernel substrate for language
+Pronounced Core-ry. A Cyna-native capability kernel substrate for language
 demonstration and future camera/imaging hardware.
 
 ### Capability

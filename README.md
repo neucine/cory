@@ -1,6 +1,6 @@
 # Cory
 
-**Cory** is pronounced **Sai-core**.
+**Cory** is pronounced **Core-ry**.
 
 Cory is a Cyna-native capability kernel substrate designed to demonstrate Cyna's systems-programming capabilities and eventually serve as the operating substrate for Raspberry Pi Compute Module 5 based camera and imaging hardware.
 
@@ -11,7 +11,7 @@ Cory is not a Linux replacement, Unix clone, desktop OS, or general-purpose serv
 ```text
 Neucine  — ecosystem / organization
 Cyna     — systems programming language
-Cory     — Cyna-native kernel substrate, pronounced Sai-core
+Cory     — Cyna-native kernel substrate, pronounced Core-ry
 ```
 
 ## Canonical specification

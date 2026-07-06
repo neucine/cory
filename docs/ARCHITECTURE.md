@@ -1,6 +1,6 @@
 # Cory Architecture
 
-Pronunciation: Sai-core
+Pronunciation: Core-ry
 
 This document is the short reader path for the current codebase. The longer
 design record remains in `docs/SPEC.md`.
