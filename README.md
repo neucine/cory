@@ -11,7 +11,7 @@ Cory is not a Linux replacement, Unix clone, desktop OS, or general-purpose serv
 ```text
 Neucine  — ecosystem / organization
 Cyna     — systems programming language
-Cory    — Cyna-native kernel substrate
+Cory     — Cyna-native kernel substrate, pronounced Sai-core
 ```
 
 ## Canonical specification
