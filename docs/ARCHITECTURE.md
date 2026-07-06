@@ -144,14 +144,15 @@ proofs, but not yet through normal preemption:
   thread.
 - AArch64 normal boot proves readable counters and masked virtual timer
   deadline programming, then configures the virtual timer IRQ route and enables
-  periodic scheduler tick mode with an empty-queue idle fallback. RISC-V64
-  normal boot proves S-mode `time`
+  periodic scheduler tick mode. It queues a normal kernel worker and resumes it
+  from a timer-driven scheduler tick after memory-ready. RISC-V64 normal boot
+  proves S-mode `time`
   readability.
 - The AArch64 platform interrupt module owns IRQ mask/unmask, GICv2
   acknowledge/EOI, and virtual timer IRQ completion helpers.
 - The AArch64 tick policy module owns timer tick delivery state. Normal boot
-  enables scheduler delivery; an empty run queue records an idle scheduler tick
-  and restores the interrupted frame without switching.
+  enables scheduler delivery; an empty run queue can still record an idle
+  scheduler tick and restore the interrupted frame without switching.
 - Normal AArch64 boot exports an explicit IRQ entrypoint that handles diagnostic
   timer ticks, can hand enabled scheduler ticks to the target-local
   schedule-and-restore path, and remains panic-only for unexpected IRQs.
@@ -170,8 +171,8 @@ proofs, but not yet through normal preemption:
   explicit machine-timer ownership decision before it grows probes.
 
 The important boundary: normal AArch64 boot can run with scheduler tick mode
-enabled and periodically rearmed, but there is no normal-boot runnable workload
-yet.
+enabled and periodically rearmed, and it can resume one normal kernel worker.
+There is still no long-running scheduler workload or userspace policy.
 
 ## Subsystem Direction
 
@@ -180,8 +181,8 @@ up to scheduler/userspace:
 
 - keep normal synchronous trap handling panic-only until recoverable trap
   dispatch has a real caller
-- decide whether the next AArch64 slice should add a normal-boot runnable
-  workload or move sideways to RISC-V timer ownership
+- decide whether the next AArch64 slice should make the normal worker yield or
+  block cleanly, or move sideways to RISC-V timer ownership
 - specify whether RISC-V timer delivery uses the current Cory-owned M-mode shim
   or a separate SBI-style platform entry, then add the matching RISC-V timer
   interrupt probe

@@ -13,4 +13,4 @@ script = "src/kernel/platform/qemu_aarch64_virt/link.ld"
 entry_symbol = "_start"
 
 [asm]
-sources = ["src/kernel/arch/aarch64/start.S", "src/kernel/arch/aarch64/exception.S"]
+sources = ["src/kernel/arch/aarch64/start.S", "src/kernel/arch/aarch64/exception.S", "src/kernel/platform/qemu_aarch64_virt/normal_thread.S"]

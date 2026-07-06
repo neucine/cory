@@ -83,7 +83,7 @@ Cory currently boots both QEMU targets into kernel selftests:
   resume-state helpers.
 - AArch64 separates synchronous exception and IRQ vector callbacks while
   preserving one trap-frame layout; normal boot enables scheduler tick mode and
-  returns from an idle scheduler tick when no ready thread is queued.
+  resumes a normal kernel worker from a periodic timer IRQ.
 - Memory bootstrap, bootstrap page tables, physical pages, heap, address-space
   metadata, kernel object IDs, capabilities, process metadata, thread metadata,
   and scheduler metadata all have boot-time selftests.
@@ -96,8 +96,8 @@ Cory currently boots both QEMU targets into kernel selftests:
   scheduler tick delivery, and validates virtual timer IRQ delivery through QEMU
   `virt` GICv2 INTID 27.
 
-Still intentionally missing: a real scheduler loop with runnable work in normal
-boot, userspace entry, syscalls, IPC, and shared buffers.
+Still intentionally missing: a long-running scheduler loop, userspace entry,
+syscalls, IPC, and shared buffers.
 
 ## Build
 
@@ -123,9 +123,9 @@ build/cory-riscv64.bin
 The current kernel entries write to the QEMU `virt` UART, initialize exception
 or trap vectors, verify readable timer counters plus masked AArch64 deadline
 programming, configure the AArch64 timer IRQ route, enable periodic scheduler
-tick mode, return from an idle scheduler tick when no ready thread is queued,
-run common bootstrap selftests through memory, VM, address spaces, and
-object/capability contracts, then halt.
+tick mode, run common bootstrap selftests through memory, VM, address spaces,
+and object/capability contracts, print `memory: physical pages ready`, then
+resume a normal AArch64 kernel worker from a timer-driven scheduler tick.
 When QEMU is available, run:
 
 ```text
@@ -244,4 +244,4 @@ It creates a ready kernel thread, enables scheduler tick delivery, receives the
 virtual timer IRQ through `exception.cy`, schedules from the saved trap frame,
 prints `tick: scheduler tick` and `normalschedtest: thread b resumed`, then
 intentionally panics. Normal boot enables the same periodic scheduler tick mode,
-but falls back to `tick: scheduler idle` when no ready thread is queued.
+and now queues a normal kernel worker that resumes from that path.

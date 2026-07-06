@@ -1031,10 +1031,13 @@ Current status:
 - AArch64 platform interrupt glue centralizes IRQ mask/unmask, GICv2
   acknowledge/EOI, virtual timer IRQ setup, and timer IRQ completion. Normal
   boot exports an IRQ entrypoint, configures the virtual timer IRQ route, and
-  can return from an idle scheduler tick.
+  can resume a queued kernel worker from a scheduler tick.
 - AArch64 tick delivery policy exists as explicit platform state. Normal boot
   enables periodic scheduler delivery; an empty run queue records an idle
   scheduler tick and restores the interrupted frame without switching.
+- Normal AArch64 boot creates a dedicated kernel worker with its own bootstrap
+  stack, enqueues it after memory and VM bootstrap, prints memory-ready, then
+  resumes that worker from the periodic timer scheduler path.
 - An opt-in AArch64 timer IRQ probe configures the QEMU `virt` GICv2 virtual
   timer PPI through that interrupt module, unmasks IRQs, receives INTID 27,
   disarms the timer, and panics intentionally. Normal boot handles the same
@@ -1048,9 +1051,10 @@ Current status:
 - An opt-in AArch64 normal IRQ scheduler probe sends an enabled timer tick
   through the normal platform IRQ entrypoint, which completes the IRQ and calls
   the target-local schedule-and-restore path.
-- Current next kernel slice: decide whether AArch64 should add a normal-boot
-  runnable workload or move sideways to specify and probe the RISC-V64 timer
-  ownership path without forcing it into the AArch64 GIC/tick shape.
+- Current next kernel slice: decide whether the normal AArch64 worker should
+  gain a clean yield/block path, or move sideways to specify and probe the
+  RISC-V64 timer ownership path without forcing it into the AArch64 GIC/tick
+  shape.
 - Cyna gaps identified by kernel slotmap work were reproduced and fixed
   upstream: mutable references to module globals work for this path, and
   freestanding aggregate lowering has memory helper support.
