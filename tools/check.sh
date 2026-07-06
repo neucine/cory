@@ -20,6 +20,7 @@ commands:
   timerirq-aarch64 check, build, and boot the opt-in AArch64 timer IRQ probe
   timerdiag-aarch64 check, build, and boot the opt-in AArch64 diagnostic tick probe
   timersched-aarch64 check, build, and boot the opt-in AArch64 timer scheduler probe
+  normalsched-aarch64 check, build, and boot the opt-in AArch64 normal IRQ scheduler probe
   normal         run aarch64 and riscv64
   traps          run trap-aarch64 and trap-riscv64
   restore        run restore-aarch64 and restore-riscv64
@@ -27,7 +28,8 @@ commands:
   timerirq       run timerirq-aarch64
   timerdiag      run timerdiag-aarch64
   timersched     run timersched-aarch64
-  all            run normal, traps, restore, sched, timerirq, timerdiag, and timersched
+  normalsched    run normalsched-aarch64
+  all            run normal, traps, restore, sched, timerirq, timerdiag, timersched, and normalsched
 EOF
 }
 
@@ -153,6 +155,10 @@ run_timersched_aarch64() {
   run_probe timersched-aarch64 cyna.toml cory-timerschedtest src/kernel/platform/qemu_aarch64_virt/timersched.test.cy src/kernel/platform/qemu_aarch64_virt/schedtest.S "timerschedtest: selected thread b" "timerschedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-timerschedtest.elf
 }
 
+run_normalsched_aarch64() {
+  run_probe normalsched-aarch64 cyna.toml cory-normalschedtest src/kernel/platform/qemu_aarch64_virt/normalsched.test.cy src/kernel/platform/qemu_aarch64_virt/schedtest.S "tick: scheduler tick" "normalschedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-normalschedtest.elf
+}
+
 run_normal() {
   run_aarch64
   run_riscv64
@@ -183,6 +189,10 @@ run_timerdiag() {
 
 run_timersched() {
   run_timersched_aarch64
+}
+
+run_normalsched() {
+  run_normalsched_aarch64
 }
 
 command="${1:-}"
@@ -220,6 +230,9 @@ case "$command" in
   timersched-aarch64)
     run_timersched_aarch64
     ;;
+  normalsched-aarch64)
+    run_normalsched_aarch64
+    ;;
   normal)
     run_normal
     ;;
@@ -241,6 +254,9 @@ case "$command" in
   timersched)
     run_timersched
     ;;
+  normalsched)
+    run_normalsched
+    ;;
   all)
     run_normal
     run_traps
@@ -249,6 +265,7 @@ case "$command" in
     run_timerirq
     run_timerdiag
     run_timersched
+    run_normalsched
     ;;
   -h|--help|help)
     usage

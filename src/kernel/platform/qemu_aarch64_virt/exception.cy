@@ -70,6 +70,25 @@ export c("cory_arch_irq_exception_entry") fn cory_arch_irq_exception_entry(raw_f
             }
             trap_context.restore_from_frame(raw_frame);
         }
+    } else if tick.enabled() {
+        if interrupt.complete_timer_irq(intid) {
+            const count = tick.record_delivery();
+            if count == 1 {
+                println("tick: scheduler tick");
+            }
+            if !trap_context.schedule_and_restore(raw_frame) {
+                println("exception: scheduler tick failed");
+                if trap_context.status() == trap_context.status_schedule_failed {
+                    println("exception: schedule status failed");
+                }
+                if trap_context.status() == trap_context.status_resume_state_missing {
+                    println("exception: resume state missing");
+                }
+                panic_mod.panic();
+            }
+            println("exception: scheduler restore returned unexpectedly");
+            panic_mod.panic();
+        }
     } else if intid != interrupt.spurious_intid {
         interrupt.end(intid);
     }

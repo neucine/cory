@@ -1017,7 +1017,8 @@ Current status:
   thread, write selected resume state, restore with `eret` or `sret`, then
   panic intentionally.
 - Target-local trap-context modules expose a reusable schedule-and-restore path
-  for timer/interrupt handlers; normal trap handlers remain panic-only.
+  for timer/interrupt handlers; normal synchronous trap handlers remain
+  panic-only.
 - The reusable trap scheduling path records target-local failure status for
   schedule failure and missing resume state.
 - Platform timer groundwork exists for both QEMU targets: AArch64 reads
@@ -1045,9 +1046,13 @@ Current status:
   receives INTID 27, disarms and EOIs the interrupt, schedules a ready kernel
   thread from the saved trap frame, and restores with `eret`. Normal boot still
   leaves timer-driven preemption disabled.
-- Current next kernel slice: decide when AArch64 diagnostic tick delivery should
-  hand off to scheduler policy, or specify and probe the RISC-V64 timer
-  ownership path without forcing it into the AArch64 GIC/tick shape.
+- An opt-in AArch64 normal IRQ scheduler probe sends an enabled timer tick
+  through the normal platform IRQ entrypoint, which completes the IRQ and calls
+  the target-local schedule-and-restore path.
+- Current next kernel slice: decide when normal AArch64 boot should switch from
+  diagnostic tick delivery to scheduler tick delivery, or specify and probe the
+  RISC-V64 timer ownership path without forcing it into the AArch64 GIC/tick
+  shape.
 - Cyna gaps identified by kernel slotmap work were reproduced and fixed
   upstream: mutable references to module globals work for this path, and
   freestanding aggregate lowering has memory helper support.

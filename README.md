@@ -89,8 +89,8 @@ Cory currently boots both QEMU targets into kernel selftests:
   and scheduler metadata all have boot-time selftests.
 - Opt-in probes validate deliberate traps, trap-frame restore with `eret`/`sret`,
   and a trap-driven scheduler handoff on both targets. AArch64 also validates a
-  dry-run diagnostic tick and a timer-IRQ-driven scheduler handoff in opt-in
-  probes.
+  dry-run diagnostic tick, a timer-IRQ-driven scheduler handoff, and the normal
+  IRQ handler's scheduler tick branch in opt-in probes.
 - Timer groundwork exists on both targets; AArch64 also proves masked deadline
   programming, configures the virtual timer IRQ route, enables one-shot
   diagnostic tick delivery, and validates virtual timer IRQ delivery through
@@ -143,6 +143,7 @@ tools/check.sh sched
 tools/check.sh timerirq
 tools/check.sh timerdiag
 tools/check.sh timersched
+tools/check.sh normalsched
 tools/check.sh all
 ```
 
@@ -230,3 +231,17 @@ It creates a ready kernel thread, programs the virtual timer, receives INTID 27,
 disarms and EOIs the timer interrupt, schedules the ready thread from the saved
 trap frame, restores with `eret`, prints `timerschedtest: thread b resumed`,
 then intentionally panics. Normal boot still does not enable preemption.
+
+## Normal IRQ scheduler probe
+
+The AArch64 normal IRQ scheduler probe validates the scheduler branch in the
+normal platform IRQ handler:
+
+```text
+tools/check.sh normalsched-aarch64
+```
+
+It creates a ready kernel thread, enables scheduler tick delivery, receives the
+virtual timer IRQ through `exception.cy`, schedules from the saved trap frame,
+prints `tick: scheduler tick` and `normalschedtest: thread b resumed`, then
+intentionally panics. Normal boot still runs diagnostic tick delivery only.

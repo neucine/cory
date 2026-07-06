@@ -152,7 +152,8 @@ proofs, but not yet through normal preemption:
   enables diagnostic delivery; opt-in probes still exercise scheduler
   consumption separately.
 - Normal AArch64 boot exports an explicit IRQ entrypoint that handles diagnostic
-  timer ticks and remains panic-only for unexpected IRQs.
+  timer ticks, can hand enabled scheduler ticks to the target-local
+  schedule-and-restore path, and remains panic-only for unexpected IRQs.
 - The AArch64 timer IRQ probe configures QEMU `virt` GICv2 through the
   interrupt module, receives virtual timer INTID 27, disarms the timer, and EOIs
   the interrupt.
@@ -161,6 +162,8 @@ proofs, but not yet through normal preemption:
 - The AArch64 timer scheduling probe receives virtual timer INTID 27, disarms
   and EOIs it, then uses the target-local schedule-and-restore path to resume a
   ready thread.
+- The AArch64 normal IRQ scheduler probe routes the same scheduler tick through
+  the normal platform IRQ entrypoint instead of a probe-specific IRQ handler.
 - RISC-V64 is intentionally counter-only today. QEMU `virt -bios none` enters
   through Cory's M-mode shim, so the matching timer interrupt path needs an
   explicit machine-timer ownership decision before it grows probes.
@@ -176,7 +179,8 @@ up to scheduler/userspace:
 
 - keep normal synchronous trap handling panic-only until recoverable trap
   dispatch has a real caller
-- decide when diagnostic tick delivery should hand off to scheduler policy
+- decide when normal boot should switch from diagnostic tick delivery to
+  scheduler tick delivery
 - specify whether RISC-V timer delivery uses the current Cory-owned M-mode shim
   or a separate SBI-style platform entry, then add the matching RISC-V timer
   interrupt probe
