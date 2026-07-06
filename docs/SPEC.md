@@ -204,6 +204,11 @@ Rules:
   instances, timers, device tree or board descriptors, and boot-device quirks.
 - Common kernel code must depend on architecture/platform traits or small Cyna
   modules, not on concrete QEMU constants.
+- Timer and interrupt ownership is a platform contract, not a generic
+  architecture schema. AArch64 QEMU `virt` currently gives Cory a direct EL1
+  virtual timer plus GICv2 path. RISC-V QEMU `virt -bios none` starts through
+  Cory's M-mode shim, so timer delivery must first define the machine-timer to
+  S-mode handoff before common scheduler code can consume ticks there.
 - Platform memory layout must include both RAM and boot-critical MMIO ranges.
   Current QEMU platforms publish platform device MMIO ranges so VM activation
   can keep panic logging and interrupt-controller access reachable after
@@ -256,8 +261,12 @@ Current privilege-mode scope:
   synchronous exceptions and supervisor interrupts, and enters S-mode.
 - Timer counter access exists on both QEMU targets. AArch64 also has masked
   virtual deadline programming plus opt-in GICv2 virtual timer IRQ delivery.
-- RISC-V timer interrupt-controller setup, SBI integration, user-mode entry,
-  and normal trap-return dispatch are not implemented yet.
+- RISC-V timer interrupt-controller setup is deliberately not treated as the
+  same shape as AArch64 GICv2. The next RISC-V timer slice should decide and
+  test one ownership path: either keep the current `-bios none` M-mode shim as
+  Cory-owned firmware for machine timer handoff, or add a separate SBI-style
+  platform entry. SBI integration, user-mode entry, and normal trap-return
+  dispatch are not implemented yet.
 
 This model matters for portability: if a platform starts at a different
 privilege level, the platform or architecture entry code must adapt before Cyna
@@ -853,6 +862,11 @@ Bring-up order:
 8. CM5 camera-oriented services
 
 Do not make early milestones depend on MIPI CSI or ISP control.
+The realistic board target remains Raspberry Pi CM5, so abstractions should be
+shaped by board facts we can eventually boot: UART, memory map, interrupt
+controller, architectural timer, firmware entry contract, and MMIO reachability
+after VM activation. QEMU targets are executable pressure tests, not the schema
+source for every future board.
 
 ## Imaging Direction
 
@@ -1010,6 +1024,9 @@ Current status:
   `cntfrq_el0`/`cntvct_el0` and programs masked virtual timer deadlines through
   `cntv_tval_el0`/`cntv_ctl_el0`, RISC-V64 grants S-mode `time` access through
   `mcounteren`, and normal boot checks prove the counters are readable.
+- RISC-V64 timer delivery is still counter-only. The current `-bios none`
+  M-mode shim delegates supervisor interrupts but does not yet provide a
+  machine-timer handoff, CLINT programming policy, or SBI-style timer call.
 - AArch64 platform interrupt glue centralizes IRQ mask/unmask, GICv2
   acknowledge/EOI, virtual timer IRQ setup, and timer IRQ completion. Normal
   boot exports a panic-only IRQ entrypoint, configures the virtual timer IRQ
@@ -1028,8 +1045,8 @@ Current status:
   receives INTID 27, disarms and EOIs the interrupt, schedules a ready kernel
   thread from the saved trap frame, and restores with `eret`. Normal boot still
   leaves timer-driven preemption disabled.
-- Current next kernel slice: decide whether normal boot should first unmask only
-  diagnostic ticks or wait for scheduler policy.
+- Current next kernel slice: specify and probe the RISC-V64 timer ownership
+  path without forcing it into the AArch64 GIC/tick shape.
 - Cyna gaps identified by kernel slotmap work were reproduced and fixed
   upstream: mutable references to module globals work for this path, and
   freestanding aggregate lowering has memory helper support.

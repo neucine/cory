@@ -159,6 +159,9 @@ proofs, but not yet through normal preemption:
 - The AArch64 timer scheduling probe receives virtual timer INTID 27, disarms
   and EOIs it, then uses the target-local schedule-and-restore path to resume a
   ready thread.
+- RISC-V64 is intentionally counter-only today. QEMU `virt -bios none` enters
+  through Cory's M-mode shim, so the matching timer interrupt path needs an
+  explicit machine-timer ownership decision before it grows probes.
 
 The important boundary: timer-driven scheduling is still diagnostic-only.
 Normal boot configures the AArch64 timer IRQ route, but does not unmask IRQs and
@@ -172,7 +175,9 @@ up to scheduler/userspace:
 - keep normal boot panic-only until interrupt scheduling is boring in probes
 - decide whether normal boot should first unmask only diagnostic ticks or wait
   for scheduler policy
-- add the matching RISC-V timer interrupt path after the AArch64 path is stable
+- specify whether RISC-V timer delivery uses the current Cory-owned M-mode shim
+  or a separate SBI-style platform entry, then add the matching RISC-V timer
+  interrupt probe
 - keep QEMU AArch64 and RISC-V64 boot checks green after every slice
 
 The first userspace and IPC work should wait until object identity and
