@@ -213,13 +213,14 @@ proofs, plus the first normal AArch64 scheduler-tick resume path:
   it.
 - The AArch64 diagnostic tick probe enables dry-run tick delivery, receives
   INTID 27, completes the timer IRQ, and does not schedule.
-- The AArch64 timer scheduling probe receives virtual timer INTID 27, disarms
-  and EOIs it, then uses the target-local schedule-and-restore path to resume a
+- AArch64 and RISC-V64 timer scheduling probes receive a target timer interrupt,
+  complete it, then use the target-local schedule-and-restore path to resume a
   ready thread.
 - The AArch64 normal IRQ scheduler probe routes the same scheduler tick through
   the normal platform IRQ entrypoint instead of a probe-specific IRQ handler.
-- RISC-V64 still has no normal scheduler tick path. The first timer interrupt
-  proof exists, but scheduling on timer delivery is separate work.
+- RISC-V64 still has no normal scheduler tick path. Timer delivery and
+  timer-driven scheduling are proven in opt-in probes, but normal boot does not
+  enable periodic scheduler delivery yet.
 
 The important boundary: normal AArch64 boot can run with scheduler tick mode
 enabled and periodically rearmed, and it can resume one normal kernel worker.
@@ -232,8 +233,8 @@ up to scheduler/userspace:
 
 - keep normal synchronous trap handling panic-only until recoverable trap
   dispatch has a real caller
-- decide whether the next AArch64 slice should make the normal worker yield or
-  block cleanly, or move sideways to RISC-V timer ownership
+- decide whether the next slice should make the normal AArch64 worker yield or
+  block cleanly, or bring RISC-V normal boot up to periodic scheduler ticks
 - keep RISC-V timer delivery in the current Cory-owned M-mode shim unless a
   later SBI-style platform entry justifies a separate target
 - keep QEMU AArch64 and RISC-V64 boot checks green after every slice

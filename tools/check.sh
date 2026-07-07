@@ -21,6 +21,7 @@ commands:
   timerirq-riscv64 check, build, and boot the opt-in RISC-V64 timer IRQ probe
   timerdiag-aarch64 check, build, and boot the opt-in AArch64 diagnostic tick probe
   timersched-aarch64 check, build, and boot the opt-in AArch64 timer scheduler probe
+  timersched-riscv64 check, build, and boot the opt-in RISC-V64 timer scheduler probe
   normalsched-aarch64 check, build, and boot the opt-in AArch64 normal IRQ scheduler probe
   normal         run aarch64 and riscv64
   traps          run trap-aarch64 and trap-riscv64
@@ -28,7 +29,7 @@ commands:
   sched          run sched-aarch64 and sched-riscv64
   timerirq       run timerirq-aarch64 and timerirq-riscv64
   timerdiag      run timerdiag-aarch64
-  timersched     run timersched-aarch64
+  timersched     run timersched-aarch64 and timersched-riscv64
   normalsched    run normalsched-aarch64
   all            run normal, traps, restore, sched, timerirq, timerdiag, timersched, and normalsched
 EOF
@@ -160,6 +161,10 @@ run_timersched_aarch64() {
   run_probe timersched-aarch64 cyna.toml cory-timerschedtest src/kernel/platform/qemu_aarch64_virt/timersched.test.cy src/kernel/platform/qemu_aarch64_virt/schedtest.S "timerschedtest: selected thread b" "timerschedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-timerschedtest.elf
 }
 
+run_timersched_riscv64() {
+  run_probe timersched-riscv64 cyna.riscv64.toml cory-timerschedtest-riscv64 src/kernel/platform/qemu_riscv64_virt/timersched.test.cy src/kernel/platform/qemu_riscv64_virt/schedtest.S "timerschedtest: selected thread b" "timerschedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-timerschedtest-riscv64.elf
+}
+
 run_normalsched_aarch64() {
   run_probe normalsched-aarch64 cyna.toml cory-normalschedtest src/kernel/platform/qemu_aarch64_virt/normalsched.test.cy src/kernel/platform/qemu_aarch64_virt/schedtest.S "tick: scheduler tick" "normalschedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-normalschedtest.elf
 }
@@ -195,6 +200,7 @@ run_timerdiag() {
 
 run_timersched() {
   run_timersched_aarch64
+  run_timersched_riscv64
 }
 
 run_normalsched() {
@@ -238,6 +244,9 @@ case "$command" in
     ;;
   timersched-aarch64)
     run_timersched_aarch64
+    ;;
+  timersched-riscv64)
+    run_timersched_riscv64
     ;;
   normalsched-aarch64)
     run_normalsched_aarch64
