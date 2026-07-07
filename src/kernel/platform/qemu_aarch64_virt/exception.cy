@@ -63,7 +63,7 @@ fn report_unhandled(raw_frame: *TrapFrame): void {
 }
 
 fn schedule_yield(raw_frame: *TrapFrame): void {
-    const resume_ip = trap_frame.scheduler_resume_ip_from_frame(raw_frame);
+    const resume_ip = trap_frame.explicit_resume_ip_from_frame(raw_frame);
     trap_frame.set_resume_state_in_frame(
         raw_frame,
         resume_ip,
@@ -86,7 +86,7 @@ fn schedule_yield(raw_frame: *TrapFrame): void {
 }
 
 fn schedule_block(raw_frame: *TrapFrame): void {
-    const resume_ip = trap_frame.scheduler_resume_ip_from_frame(raw_frame);
+    const resume_ip = trap_frame.explicit_resume_ip_from_frame(raw_frame);
     println("scheduler: block trap");
     println("scheduler: normal thread blocked");
     if !trap_context.block_current_and_restore(raw_frame, resume_ip) {

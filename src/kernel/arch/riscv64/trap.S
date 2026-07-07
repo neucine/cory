@@ -116,9 +116,11 @@ cory_arch_abi_probe_value:
 .global cory_arch_trigger_test_trap
 .type cory_arch_trigger_test_trap, @function
 cory_arch_trigger_test_trap:
-    # C ABI: void cory_arch_trigger_test_trap(void)
+    # C ABI: void cory_arch_trigger_test_trap(void). a1 carries exact resume address.
     # Opt-in trap-test entry point. Normal boot entries do not call it.
+    la a1, 1f
     ebreak
+1:
     ret
 
 .global cory_arch_yield_trap

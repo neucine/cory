@@ -32,7 +32,7 @@ export c("cory_arch_sync_exception_entry") fn cory_arch_sync_exception_entry(raw
     println("restoretest: trap aarch64");
     trap_frame.set_resume_state_in_frame(
         raw_frame,
-        trap_frame.instruction_pointer_from_frame(raw_frame) + 4,
+        trap_frame.explicit_resume_ip_from_frame(raw_frame),
         trap_frame.stack_pointer_from_frame(raw_frame),
         trap_frame.status_flags_from_frame(raw_frame)
     );
