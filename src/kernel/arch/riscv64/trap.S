@@ -124,15 +124,19 @@ cory_arch_trigger_test_trap:
 .global cory_arch_yield_trap
 .type cory_arch_yield_trap, @function
 cory_arch_yield_trap:
-    # C ABI: void cory_arch_yield_trap(void)
+    # C ABI: void cory_arch_yield_trap(void). a1 carries exact resume address.
     li a0, 1
+    la a1, 1f
     ebreak
+1:
     ret
 
 .global cory_arch_block_trap
 .type cory_arch_block_trap, @function
 cory_arch_block_trap:
-    # C ABI: void cory_arch_block_trap(void)
+    # C ABI: void cory_arch_block_trap(void). a1 carries exact resume address.
     li a0, 2
+    la a1, 1f
     ebreak
+1:
     ret

@@ -231,6 +231,12 @@ pub fn instruction_pointer_from_frame(frame: *TrapFrame): usize {
     }
 }
 
+pub fn scheduler_resume_ip_from_frame(frame: *TrapFrame): usize {
+    unchecked {
+        return (*frame).a1 as usize;
+    }
+}
+
 pub fn stack_pointer_from_frame(frame: *TrapFrame): usize {
     unchecked {
         return (*frame).sp as usize;
