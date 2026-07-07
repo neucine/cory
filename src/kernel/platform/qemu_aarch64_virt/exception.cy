@@ -13,6 +13,9 @@ extern c("cory_arch_current_el") fn cory_arch_current_el(): c_ulong;
 
 const yield_brk_esr: usize = 0xf2000001;
 const block_brk_esr: usize = 0xf2000002;
+const scheduler_trap_unknown: usize = 0;
+const scheduler_trap_yield: usize = 1;
+const scheduler_trap_block: usize = 2;
 
 pub fn init(): void {
     if cory_arch_current_el() != 1 {
@@ -100,13 +103,34 @@ fn schedule_block(raw_frame: *TrapFrame): void {
     panic_mod.panic();
 }
 
+fn scheduler_trap_op(esr_el1: usize): usize {
+    if esr_el1 == yield_brk_esr {
+        return scheduler_trap_yield;
+    }
+    if esr_el1 == block_brk_esr {
+        return scheduler_trap_block;
+    }
+    return scheduler_trap_unknown;
+}
+
+fn dispatch_scheduler_trap(raw_frame: *TrapFrame, op: usize): bool {
+    if op == scheduler_trap_yield {
+        schedule_yield(raw_frame);
+        return true;
+    }
+    if op == scheduler_trap_block {
+        schedule_block(raw_frame);
+        return true;
+    }
+    return false;
+}
+
 export c("cory_arch_sync_exception_entry") fn cory_arch_sync_exception_entry(raw_frame: *TrapFrame): void {
     const frame = trap_frame.diagnostic_from_frame(raw_frame);
-    if tick.enabled() and frame.esr_el1 == yield_brk_esr {
-        schedule_yield(raw_frame);
-    }
-    if tick.enabled() and frame.esr_el1 == block_brk_esr {
-        schedule_block(raw_frame);
+    if tick.enabled() {
+        if dispatch_scheduler_trap(raw_frame, scheduler_trap_op(frame.esr_el1)) {
+            return;
+        }
     }
     report_unhandled(raw_frame);
 }

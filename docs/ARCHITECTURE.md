@@ -223,6 +223,10 @@ proofs, plus normal scheduler-tick resume paths on both QEMU targets:
   the normal platform IRQ entrypoint instead of a probe-specific IRQ handler.
 - RISC-V64 normal boot now routes the same timer delivery through its normal
   trap entrypoint and resumes one normal kernel worker.
+- Normal yield/block operations are decoded as target-local scheduler traps.
+  AArch64 uses `brk` immediates; RISC-V64 uses an `ebreak` plus a saved argument
+  marker. The dispatch still lives in platform exception code until a broader
+  syscall surface exists.
 
 The important boundary: normal boot on both QEMU targets can run with scheduler
 tick mode enabled, resume one normal kernel worker, switch away from that worker
@@ -237,8 +241,8 @@ up to scheduler/userspace:
 
 - keep normal synchronous trap handling panic-only until recoverable trap
   dispatch has a real caller
-- decide whether the next slice should grow a second normal worker or start a
-  syscall-shaped dispatch table for yield/block operations
+- decide whether the next slice should grow a second normal worker or factor the
+  target-local scheduler trap dispatch into a broader syscall surface
 - keep RISC-V timer delivery in the current Cory-owned M-mode shim unless a
   later SBI-style platform entry justifies a separate target
 - keep QEMU AArch64 and RISC-V64 boot checks green after every slice
