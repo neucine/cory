@@ -48,6 +48,15 @@ memory/selftest.cy, object/selftest.cy, task/selftest.cy, arch/selftest.cy
 - `arch/*` must not contain QEMU board constants.
 - `platform/*` may depend on one architecture, but common kernel code should
   not depend on a concrete platform module.
+- `platform/*/main.cy` is the current composition point. It may import concrete
+  platform modules, concrete architecture modules, and common kernel modules in
+  order to wire one boot image together.
+- Common kernel modules should receive platform and architecture facts as plain
+  values or narrow calls. Do not add a common abstraction layer until two target
+  paths need the same boundary and the local call sites show the shape.
+- Cyna-to-Cyna calls should use normal imports. `extern c` and `export c` are
+  only for ABI crossings with assembly, linker-provided symbols, runtime
+  callbacks, or intentionally exported probe entrypoints.
 - `object/*` is authority infrastructure. Concrete resources such as address
   spaces, processes, channels, events, and shared buffers should connect to it
   instead of each inventing separate lifetime or rights rules. Kernel object
@@ -116,7 +125,7 @@ arch start assembly
             -> run object/capability selftests
             -> enable virtual heap addressing
         -> platform VM activation
-        -> bootstrap.finish_after_memory_ready(...)
+        -> target-local scheduler/timer finish work
 ```
 
 Platform code performs the final MMU register switch because the activation
@@ -128,10 +137,48 @@ space. User-shaped address spaces currently appear only as unrooted policy
 fixtures in selftests; real userspace address spaces arrive with process and
 loader work.
 
+## ABI Boundaries
+
+Most kernel calls are ordinary Cyna module calls. The C ABI is deliberately
+small and should stay visible at the edge where a Cyna function name must match
+an assembler, linker, or runtime symbol.
+
+Current ABI groups:
+
+- Linker symbols: `__bss_start`, `__bss_end`, and `__kernel_end` are imported by
+  common early boot code because the linker script owns those addresses.
+- Entry symbols: architecture start assembly calls exported platform
+  `cory_kernel_entry` functions. Test images also export their own
+  `cory_kernel_entry`.
+- Platform console hook: common `kernel/console.cy` imports
+  `cory_console_putc`, while each platform exports it and maps it to its UART.
+  This is the one current platform hook used directly by common code.
+- Heap mapping hook: common heap code imports `cory_heap_map_virtual_page`.
+  Each platform main exports it because the mapping needs the linked page-table
+  implementation and the target TLB flush symbol.
+- Trap and restore symbols: architecture assembly saves target trap frames and
+  calls exported Cyna trap entrypoints. Cyna trap context code calls
+  architecture restore assembly when resuming a frame.
+- CPU register helpers: platform timer, interrupt, exception, and VM activation
+  modules import small architecture assembly helpers for registers that Cyna
+  should not encode directly.
+- Probe-only symbols: scheduler and trap tests export or import extra ABI
+  entrypoints such as deliberate trap triggers, probe thread entries, and stack
+  helpers. These should not set the production boundary.
+
+When a new boundary is needed, prefer this order:
+
+1. Use a normal Cyna import if both sides are Cyna and target-local.
+2. Pass data into common code if the common code only needs facts such as memory
+   layout, page-table spec, or architecture id.
+3. Add a tiny common contract only after repeated targets need the same shape.
+4. Use `extern c`/`export c` only when symbol linkage or the target ABI is the
+   actual contract.
+
 ## Current Progress
 
 The implementation is through the first recoverable-trap and timer-interrupt
-proofs, but not yet through normal preemption:
+proofs, plus the first normal AArch64 scheduler-tick resume path:
 
 - Both QEMU targets boot, initialize vectors, activate bootstrap identity
   mappings, and run memory/object/task/arch selftests.
