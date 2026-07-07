@@ -1,7 +1,11 @@
 import .kernel.arch.riscv64.trap_frame;
+import .kernel.arch.riscv64.trap_context;
 import { TrapFrame } from .kernel.arch.riscv64.trap_frame;
 import .kernel.console;
 import .kernel.panic as panic_mod;
+import .kernel.platform.qemu_riscv64_virt.interrupt;
+import .kernel.platform.qemu_riscv64_virt.tick;
+import .kernel.task.scheduler;
 
 extern c("cory_arch_trap_init") fn cory_arch_trap_init(): void;
 extern c("cory_arch_abi_probe_value") fn cory_arch_abi_probe_value(): c_ulong;
@@ -20,13 +24,43 @@ pub fn init(): void {
 }
 
 export c("cory_arch_trap_entry") fn cory_arch_trap_entry(raw_frame: *TrapFrame): void {
+    const frame = trap_frame.diagnostic_from_frame(raw_frame);
+    if tick.enabled() {
+        if interrupt.complete_timer_irq(frame.scause) {
+            const count = tick.record_delivery();
+            if !interrupt.program_timer_after_ticks(tick.interval_ticks()) {
+                println("exception: scheduler tick rearm failed");
+                panic_mod.panic();
+            }
+            if scheduler.count() == 0 {
+                if count == 1 {
+                    println("tick: scheduler idle");
+                }
+                trap_context.restore_from_frame(raw_frame);
+            }
+            if count == 1 {
+                println("tick: scheduler tick");
+            }
+            if !trap_context.schedule_and_restore(raw_frame) {
+                println("exception: scheduler tick failed");
+                if trap_context.status() == trap_context.status_schedule_failed {
+                    println("exception: schedule status failed");
+                }
+                if trap_context.status() == trap_context.status_resume_state_missing {
+                    println("exception: resume state missing");
+                }
+                panic_mod.panic();
+            }
+            println("exception: scheduler restore returned unexpectedly");
+            panic_mod.panic();
+        }
+    }
     trap_frame.set_resume_state_in_frame(
         raw_frame,
         trap_frame.instruction_pointer_from_frame(raw_frame),
         trap_frame.stack_pointer_from_frame(raw_frame),
         trap_frame.status_flags_from_frame(raw_frame)
     );
-    const frame = trap_frame.diagnostic_from_frame(raw_frame);
     if trap_frame.instruction_pointer_from_frame(raw_frame) != frame.sepc {
         println("exception: riscv64 resume ip mismatch");
         panic_mod.panic();
@@ -44,5 +78,8 @@ export c("cory_arch_trap_entry") fn cory_arch_trap_entry(raw_frame: *TrapFrame):
     console.println_hex(frame.stval);
     println("exception: sstatus");
     console.println_hex(frame.sstatus);
+    if tick.delivery_enabled() {
+        println("exception: tick delivery enabled");
+    }
     panic_mod.panic();
 }

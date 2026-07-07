@@ -178,7 +178,7 @@ When a new boundary is needed, prefer this order:
 ## Current Progress
 
 The implementation is through the first recoverable-trap and timer-interrupt
-proofs, plus the first normal AArch64 scheduler-tick resume path:
+proofs, plus normal scheduler-tick resume paths on both QEMU targets:
 
 - Both QEMU targets boot, initialize vectors, activate bootstrap identity
   mappings, and run memory/object/task/arch selftests.
@@ -193,9 +193,10 @@ proofs, plus the first normal AArch64 scheduler-tick resume path:
   thread.
 - AArch64 normal boot proves readable counters and masked virtual timer
   deadline programming, then configures the virtual timer IRQ route and enables
-  periodic scheduler tick mode. It queues a normal kernel worker and resumes it
-  from a timer-driven scheduler tick after memory-ready. RISC-V64 normal boot
-  proves S-mode `time` readability.
+  periodic scheduler tick mode. RISC-V64 normal boot proves S-mode `time`
+  readability, configures the Cory-owned M-mode timer shim, and enables
+  supervisor timer delivery. Both targets queue a normal kernel worker and
+  resume it from a timer-driven scheduler tick after memory-ready.
 - The AArch64 platform interrupt module owns IRQ mask/unmask, GICv2
   acknowledge/EOI, and virtual timer IRQ completion helpers.
 - The AArch64 tick policy module owns timer tick delivery state. Normal boot
@@ -218,13 +219,12 @@ proofs, plus the first normal AArch64 scheduler-tick resume path:
   ready thread.
 - The AArch64 normal IRQ scheduler probe routes the same scheduler tick through
   the normal platform IRQ entrypoint instead of a probe-specific IRQ handler.
-- RISC-V64 still has no normal scheduler tick path. Timer delivery and
-  timer-driven scheduling are proven in opt-in probes, but normal boot does not
-  enable periodic scheduler delivery yet.
+- RISC-V64 normal boot now routes the same timer delivery through its normal
+  trap entrypoint and resumes one normal kernel worker.
 
-The important boundary: normal AArch64 boot can run with scheduler tick mode
-enabled and periodically rearmed, and it can resume one normal kernel worker.
-There is still no long-running scheduler workload or userspace policy.
+The important boundary: normal boot on both QEMU targets can run with scheduler
+tick mode enabled and resume one normal kernel worker. There is still no
+long-running scheduler workload or userspace policy.
 
 ## Subsystem Direction
 
@@ -233,8 +233,8 @@ up to scheduler/userspace:
 
 - keep normal synchronous trap handling panic-only until recoverable trap
   dispatch has a real caller
-- decide whether the next slice should make the normal AArch64 worker yield or
-  block cleanly, or bring RISC-V normal boot up to periodic scheduler ticks
+- decide whether the next slice should make normal workers yield or block
+  cleanly after their first resume
 - keep RISC-V timer delivery in the current Cory-owned M-mode shim unless a
   later SBI-style platform entry justifies a separate target
 - keep QEMU AArch64 and RISC-V64 boot checks green after every slice

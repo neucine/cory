@@ -118,7 +118,7 @@ run_aarch64() {
 run_riscv64() {
   "$CYNA" check cyna.riscv64.toml
   "$CYNA" build cyna.riscv64.toml
-  run_qemu_expect riscv64 "timer: counter ready" "memory: physical pages ready" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-riscv64.elf
+  run_qemu_expect riscv64 "memory: physical pages ready" "scheduler: normal thread resumed" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-riscv64.elf
 }
 
 run_trap_aarch64() {

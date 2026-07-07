@@ -13,4 +13,4 @@ script = "src/kernel/platform/qemu_riscv64_virt/link.ld"
 entry_symbol = "_start"
 
 [asm]
-sources = ["src/kernel/arch/riscv64/start.S", "src/kernel/arch/riscv64/trap.S"]
+sources = ["src/kernel/arch/riscv64/start.S", "src/kernel/arch/riscv64/trap.S", "src/kernel/platform/qemu_riscv64_virt/normal_thread.S"]
