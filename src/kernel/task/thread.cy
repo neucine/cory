@@ -8,7 +8,7 @@ import .kernel.task.capability_space;
 import .kernel.task.process;
 
 pub const invalid_id: usize = slot_map.invalid_key;
-pub const max_threads: usize = 16;
+pub const max_threads: usize = 32;
 
 pub enum ThreadState: i32 {
     empty = 0,
@@ -43,7 +43,7 @@ pub struct Thread {
     pub stack_base: usize;
 }
 
-var threads: StaticSlotMap<[16]Thread> = StaticSlotMap<[16]Thread> {
+var threads: StaticSlotMap<[32]Thread> = StaticSlotMap<[32]Thread> {
     values: [Thread {
         id: invalid_id,
         object_id: kernel_object.invalid_id,
@@ -53,9 +53,9 @@ var threads: StaticSlotMap<[16]Thread> = StaticSlotMap<[16]Thread> {
         state: ThreadState.empty,
         entry_addr: 0,
         stack_base: 0,
-    }] ** 16,
-    live: [false] ** 16,
-    generations: [0] ** 16,
+    }] ** 32,
+    live: [false] ** 32,
+    generations: [0] ** 32,
     live_count: 0,
     last_status: slot_map.status_ok,
 };

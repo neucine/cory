@@ -6,7 +6,7 @@ import .kernel.task.thread;
 import { ThreadState } from .kernel.task.thread;
 import .kernel.memory.page_table;
 
-pub const max_contexts: usize = 16;
+pub const max_contexts: usize = 32;
 pub const invalid_id: usize = slot_map.invalid_key;
 pub const invalid_arch_context: usize = slot_map.invalid_key;
 
@@ -39,8 +39,8 @@ pub struct ResumeState {
     pub valid: bool;
 }
 
-var context_ids_by_thread_index: [16]usize = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-var contexts: StaticSlotMap<[16]ThreadContext> = StaticSlotMap<[16]ThreadContext> {
+var context_ids_by_thread_index: [32]usize = [0] ** 32;
+var contexts: StaticSlotMap<[32]ThreadContext> = StaticSlotMap<[32]ThreadContext> {
     values: [ThreadContext {
         id: invalid_id,
         thread_id: thread.invalid_id,
@@ -50,9 +50,9 @@ var contexts: StaticSlotMap<[16]ThreadContext> = StaticSlotMap<[16]ThreadContext
         arch_id: 0,
         arch_context_id: invalid_arch_context,
         initialized: false,
-    }] ** 16,
-    live: [false] ** 16,
-    generations: [0] ** 16,
+    }] ** 32,
+    live: [false] ** 32,
+    generations: [0] ** 32,
     live_count: 0,
     last_status: slot_map.status_ok,
 };

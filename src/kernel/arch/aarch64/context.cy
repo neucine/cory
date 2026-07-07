@@ -4,7 +4,7 @@ import .kernel.memory.page_table;
 
 pub const arch_id: i32 = page_table.arch_aarch64;
 pub const invalid_context: usize = slot_map.invalid_key;
-pub const max_contexts: usize = 16;
+pub const max_contexts: usize = 32;
 
 pub const status_ok: i32 = 0;
 pub const status_table_full: i32 = 1;
@@ -18,16 +18,16 @@ pub struct ArchContext {
     pub status_flags: usize;
 }
 
-var contexts: StaticSlotMap<[16]ArchContext> = StaticSlotMap<[16]ArchContext> {
+var contexts: StaticSlotMap<[32]ArchContext> = StaticSlotMap<[32]ArchContext> {
     values: [ArchContext {
         id: invalid_context,
         owner_thread_id: 0,
         instruction_pointer: 0,
         stack_pointer: 0,
         status_flags: 0,
-    }] ** 16,
-    live: [false] ** 16,
-    generations: [0] ** 16,
+    }] ** 32,
+    live: [false] ** 32,
+    generations: [0] ** 32,
     live_count: 0,
     last_status: slot_map.status_ok,
 };

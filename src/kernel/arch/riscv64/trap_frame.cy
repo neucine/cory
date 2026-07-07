@@ -175,6 +175,12 @@ pub fn stack_pointer_from_frame(frame: *TrapFrame): usize {
     }
 }
 
+pub fn return_address_from_frame(frame: *TrapFrame): usize {
+    unchecked {
+        return (*frame).ra as usize;
+    }
+}
+
 pub fn status_flags_from_frame(frame: *TrapFrame): usize {
     unchecked {
         return (*frame).sstatus as usize;

@@ -2,7 +2,7 @@ import .kernel.task.context;
 import .kernel.task.thread;
 import { ThreadState } from .kernel.task.thread;
 
-pub const max_run_queue: usize = 16;
+pub const max_run_queue: usize = 32;
 pub const invalid_thread: usize = thread.invalid_id;
 
 pub enum SchedulerStatus: i32 {
@@ -15,7 +15,7 @@ pub enum SchedulerStatus: i32 {
     context_save_failed,
 }
 
-var run_queue: [16]usize = [0] ** 16;
+var run_queue: [32]usize = [0] ** 32;
 var queued_count: usize = 0;
 var current_thread: usize = thread.invalid_id;
 var last_status: SchedulerStatus = SchedulerStatus.ok;
@@ -110,6 +110,21 @@ pub fn dequeue(): usize {
     return thread_id;
 }
 
+fn remove_queued(thread_id: usize): bool {
+    const found = queue_index(thread_id);
+    if found >= max_run_queue {
+        return false;
+    }
+    var index = found + 1;
+    while index < queued_count {
+        run_queue[index - 1] = run_queue[index];
+        index = index + 1;
+    }
+    queued_count = queued_count - 1;
+    run_queue[queued_count] = thread.invalid_id;
+    return true;
+}
+
 pub fn schedule_next(): usize {
     if queued_count == 0 {
         last_status = SchedulerStatus.empty;
@@ -147,6 +162,13 @@ pub fn schedule_next_saving_current(instruction_pointer: usize, stack_pointer: u
         last_status = SchedulerStatus.invalid_thread;
         return thread.invalid_id;
     }
+    if previous_entry.state == ThreadState.blocked {
+        if queued_count == 0 {
+            last_status = SchedulerStatus.not_ready;
+            return thread.invalid_id;
+        }
+        return schedule_next();
+    }
     if previous_entry.state != ThreadState.running {
         last_status = SchedulerStatus.not_ready;
         return thread.invalid_id;
@@ -179,6 +201,12 @@ pub fn block_current_saving_context(instruction_pointer: usize, stack_pointer: u
     }
     if !thread.mark_blocked(previous) {
         last_status = SchedulerStatus.invalid_thread;
+        return thread.invalid_id;
+    }
+    while remove_queued(previous) {
+    }
+    if queued_count == 0 {
+        last_status = SchedulerStatus.empty;
         return thread.invalid_id;
     }
 

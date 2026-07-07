@@ -4,8 +4,8 @@ import { CapabilityRights } from .kernel.object.capability;
 
 pub const invalid_slot: usize = 0 - 1;
 pub const max_owners: usize = 8;
-pub const slots_per_owner: usize = 8;
-pub const max_slots: usize = 64;
+pub const slots_per_owner: usize = 16;
+pub const max_slots: usize = 128;
 
 pub enum CapabilitySpaceStatus: i32 {
     ok = 0,
@@ -18,13 +18,13 @@ pub enum CapabilitySpaceStatus: i32 {
 pub struct CapabilityOwner {
     pub owner_id: usize;
     pub count: usize;
-    pub slots: [8]usize;
+    pub slots: [16]usize;
 }
 
 var owners: [8]CapabilityOwner = [CapabilityOwner {
     owner_id: slot_map.invalid_key,
     count: 0,
-    slots: [capability.invalid_id] ** 8,
+    slots: [capability.invalid_id] ** 16,
 }] ** 8;
 var last_status: CapabilitySpaceStatus = CapabilitySpaceStatus.ok;
 
@@ -32,7 +32,7 @@ fn empty_owner(): CapabilityOwner {
     return CapabilityOwner {
         owner_id: slot_map.invalid_key,
         count: 0,
-        slots: [capability.invalid_id] ** 8,
+        slots: [capability.invalid_id] ** 16,
     };
 }
 

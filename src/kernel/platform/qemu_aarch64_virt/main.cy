@@ -22,13 +22,16 @@ import .kernel.task.scheduler;
 import .kernel.task.thread;
 
 extern c("cory_aarch64_flush_kernel_tlb") fn flush_kernel_tlb(): void;
-extern c("cory_normal_thread_entry_addr") fn normal_thread_entry_addr(): c_ulong;
-extern c("cory_normal_thread_stack_top") fn normal_thread_stack_top(): c_ulong;
+extern c("cory_normal_thread_a_entry_addr") fn normal_thread_a_entry_addr(): c_ulong;
+extern c("cory_normal_thread_a_stack_top") fn normal_thread_a_stack_top(): c_ulong;
+extern c("cory_normal_thread_b_entry_addr") fn normal_thread_b_entry_addr(): c_ulong;
+extern c("cory_normal_thread_b_stack_top") fn normal_thread_b_stack_top(): c_ulong;
 extern c("cory_arch_yield_trap") fn yield_trap(): void;
 extern c("cory_arch_block_trap") fn block_trap(): void;
 
 const kernel_spsr_el1: usize = 0x600003c5;
-var normal_thread_id: usize = thread.invalid_id;
+var normal_thread_a_id: usize = thread.invalid_id;
+var normal_thread_b_id: usize = thread.invalid_id;
 
 export c("cory_heap_map_virtual_page") fn cory_heap_map_virtual_page(virtual_addr: c_ulong): c_ulong {
     const phys_page = phys.alloc_page();
@@ -45,44 +48,48 @@ export c("cory_heap_map_virtual_page") fn cory_heap_map_virtual_page(virtual_add
     return phys_page as c_ulong;
 }
 
-fn prepare_normal_thread(): void {
+fn prepare_normal_thread(entry_addr: usize, stack_top: usize): usize {
     const kernel_process = process.current();
     const process_info = process.get(kernel_process);
-    normal_thread_id = thread.create_kernel_ready(kernel_process, process_info.capability_slot);
-    if normal_thread_id == thread.invalid_id {
+    const thread_id = thread.create_kernel_ready(kernel_process, process_info.capability_slot);
+    if thread_id == thread.invalid_id {
         println("scheduler: normal thread create failed");
         panic_mod.panic();
     }
-    const arch_context = aarch64_context.allocate(normal_thread_id);
+    const arch_context = aarch64_context.allocate(thread_id);
     if arch_context == context.invalid_arch_context {
         println("scheduler: normal thread arch context failed");
         panic_mod.panic();
     }
-    const entry_addr = normal_thread_entry_addr() as usize;
-    const stack_top = normal_thread_stack_top() as usize;
-    if !context.attach_kernel_context(normal_thread_id, entry_addr, stack_top, page_table.arch_id, arch_context) {
+    if !context.attach_kernel_context(thread_id, entry_addr, stack_top, page_table.arch_id, arch_context) {
         println("scheduler: normal thread attach failed");
         panic_mod.panic();
     }
-    if !context.save_resume_state(normal_thread_id, entry_addr, stack_top, kernel_spsr_el1) {
+    if !context.save_resume_state(thread_id, entry_addr, stack_top, kernel_spsr_el1) {
         println("scheduler: normal thread seed failed");
         panic_mod.panic();
     }
-    if !scheduler.enqueue(normal_thread_id) {
+    if !scheduler.enqueue(thread_id) {
         println("scheduler: normal thread enqueue failed");
         panic_mod.panic();
     }
-    println("scheduler: normal thread ready");
+    return thread_id;
 }
 
-export c("cory_normal_thread") fn cory_normal_thread(): void {
-    println("scheduler: normal thread resumed");
-    println("scheduler: normal thread yielding");
+export c("cory_normal_thread_a") fn cory_normal_thread_a(): void {
+    println("scheduler: normal thread a resumed");
+    println("scheduler: normal thread a yielding");
     yield_trap();
-    println("scheduler: normal thread yield returned");
-    println("scheduler: normal thread blocking");
+    println("scheduler: normal thread a yield returned");
+    while true {
+    }
+}
+
+export c("cory_normal_thread_b") fn cory_normal_thread_b(): void {
+    println("scheduler: normal thread b resumed");
+    println("scheduler: normal thread b blocking");
     block_trap();
-    println("scheduler: normal thread block returned unexpectedly");
+    println("scheduler: normal thread b block returned unexpectedly");
     panic_mod.panic();
 }
 
@@ -108,9 +115,16 @@ export c("cory_kernel_entry") fn cory_kernel_entry(): void {
     const map = memory.layout();
     bootstrap.prepare_memory(map, page_table.spec(), page_table.arch_id);
     vm_activation.activate_identity_vm(vm.bootstrap_plan(map, page_table.spec()).page_table_root);
-    prepare_normal_thread();
+    normal_thread_a_id = prepare_normal_thread(normal_thread_a_entry_addr() as usize, normal_thread_a_stack_top() as usize);
+    println("scheduler: normal thread a ready");
+    normal_thread_b_id = prepare_normal_thread(normal_thread_b_entry_addr() as usize, normal_thread_b_stack_top() as usize);
+    println("scheduler: normal thread b ready");
     selftest.run_heap_virtual_tests(map, page_table.spec());
     kernel.print_memory_ready();
+    if !thread.mark_blocked(scheduler.current()) {
+        println("scheduler: bootstrap block failed");
+        panic_mod.panic();
+    }
     tick.set_enabled();
     if !interrupt.program_timer_after_ticks(tick.interval_ticks(timer.frequency())) {
         println("tick: scheduler program failed");
