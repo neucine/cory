@@ -195,8 +195,7 @@ proofs, plus the first normal AArch64 scheduler-tick resume path:
   deadline programming, then configures the virtual timer IRQ route and enables
   periodic scheduler tick mode. It queues a normal kernel worker and resumes it
   from a timer-driven scheduler tick after memory-ready. RISC-V64 normal boot
-  proves S-mode `time`
-  readability.
+  proves S-mode `time` readability.
 - The AArch64 platform interrupt module owns IRQ mask/unmask, GICv2
   acknowledge/EOI, and virtual timer IRQ completion helpers.
 - The AArch64 tick policy module owns timer tick delivery state. Normal boot
@@ -208,6 +207,10 @@ proofs, plus the first normal AArch64 scheduler-tick resume path:
 - The AArch64 timer IRQ probe configures QEMU `virt` GICv2 through the
   interrupt module, receives virtual timer INTID 27, disarms the timer, and EOIs
   the interrupt.
+- The RISC-V64 timer IRQ probe keeps machine timer ownership in the Cory M-mode
+  shim. The shim programs QEMU `virt` CLINT `mtimecmp`, converts MTIP into a
+  delegated supervisor timer interrupt, and lets the S-mode trap path complete
+  it.
 - The AArch64 diagnostic tick probe enables dry-run tick delivery, receives
   INTID 27, completes the timer IRQ, and does not schedule.
 - The AArch64 timer scheduling probe receives virtual timer INTID 27, disarms
@@ -215,9 +218,8 @@ proofs, plus the first normal AArch64 scheduler-tick resume path:
   ready thread.
 - The AArch64 normal IRQ scheduler probe routes the same scheduler tick through
   the normal platform IRQ entrypoint instead of a probe-specific IRQ handler.
-- RISC-V64 is intentionally counter-only today. QEMU `virt -bios none` enters
-  through Cory's M-mode shim, so the matching timer interrupt path needs an
-  explicit machine-timer ownership decision before it grows probes.
+- RISC-V64 still has no normal scheduler tick path. The first timer interrupt
+  proof exists, but scheduling on timer delivery is separate work.
 
 The important boundary: normal AArch64 boot can run with scheduler tick mode
 enabled and periodically rearmed, and it can resume one normal kernel worker.
@@ -232,9 +234,8 @@ up to scheduler/userspace:
   dispatch has a real caller
 - decide whether the next AArch64 slice should make the normal worker yield or
   block cleanly, or move sideways to RISC-V timer ownership
-- specify whether RISC-V timer delivery uses the current Cory-owned M-mode shim
-  or a separate SBI-style platform entry, then add the matching RISC-V timer
-  interrupt probe
+- keep RISC-V timer delivery in the current Cory-owned M-mode shim unless a
+  later SBI-style platform entry justifies a separate target
 - keep QEMU AArch64 and RISC-V64 boot checks green after every slice
 
 The first userspace and IPC work should wait until object identity and

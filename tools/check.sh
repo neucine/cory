@@ -18,6 +18,7 @@ commands:
   sched-aarch64 check, build, and boot the opt-in AArch64 trap scheduler probe
   sched-riscv64 check, build, and boot the opt-in RISC-V64 trap scheduler probe
   timerirq-aarch64 check, build, and boot the opt-in AArch64 timer IRQ probe
+  timerirq-riscv64 check, build, and boot the opt-in RISC-V64 timer IRQ probe
   timerdiag-aarch64 check, build, and boot the opt-in AArch64 diagnostic tick probe
   timersched-aarch64 check, build, and boot the opt-in AArch64 timer scheduler probe
   normalsched-aarch64 check, build, and boot the opt-in AArch64 normal IRQ scheduler probe
@@ -25,7 +26,7 @@ commands:
   traps          run trap-aarch64 and trap-riscv64
   restore        run restore-aarch64 and restore-riscv64
   sched          run sched-aarch64 and sched-riscv64
-  timerirq       run timerirq-aarch64
+  timerirq       run timerirq-aarch64 and timerirq-riscv64
   timerdiag      run timerdiag-aarch64
   timersched     run timersched-aarch64
   normalsched    run normalsched-aarch64
@@ -147,6 +148,10 @@ run_timerirq_aarch64() {
   run_probe timerirq-aarch64 cyna.toml cory-timerirqtest src/kernel/platform/qemu_aarch64_virt/timerirq.test.cy "" "timerirqtest: waiting for virtual timer irq" "timerirqtest: received virtual timer irq" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-timerirqtest.elf
 }
 
+run_timerirq_riscv64() {
+  run_probe timerirq-riscv64 cyna.riscv64.toml cory-timerirqtest-riscv64 src/kernel/platform/qemu_riscv64_virt/timerirq.test.cy "" "timerirqtest: waiting for supervisor timer irq" "timerirqtest: received supervisor timer irq" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-timerirqtest-riscv64.elf
+}
+
 run_timerdiag_aarch64() {
   run_probe timerdiag-aarch64 cyna.toml cory-timerdiagtest src/kernel/platform/qemu_aarch64_virt/timerdiag.test.cy "" "timerdiagtest: waiting for diagnostic tick" "timerdiagtest: diagnostic tick" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory-timerdiagtest.elf
 }
@@ -181,6 +186,7 @@ run_sched() {
 
 run_timerirq() {
   run_timerirq_aarch64
+  run_timerirq_riscv64
 }
 
 run_timerdiag() {
@@ -223,6 +229,9 @@ case "$command" in
     ;;
   timerirq-aarch64)
     run_timerirq_aarch64
+    ;;
+  timerirq-riscv64)
+    run_timerirq_riscv64
     ;;
   timerdiag-aarch64)
     run_timerdiag_aarch64
