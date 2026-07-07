@@ -56,6 +56,45 @@ pub cstruct TrapFrame {
     far_el1: c_ulong;
 }
 
+pub const empty_frame_value: TrapFrame = TrapFrame {
+    x0: 0,
+    x1: 0,
+    x2: 0,
+    x3: 0,
+    x4: 0,
+    x5: 0,
+    x6: 0,
+    x7: 0,
+    x8: 0,
+    x9: 0,
+    x10: 0,
+    x11: 0,
+    x12: 0,
+    x13: 0,
+    x14: 0,
+    x15: 0,
+    x16: 0,
+    x17: 0,
+    x18: 0,
+    x19: 0,
+    x20: 0,
+    x21: 0,
+    x22: 0,
+    x23: 0,
+    x24: 0,
+    x25: 0,
+    x26: 0,
+    x27: 0,
+    x28: 0,
+    x29: 0,
+    x30: 0,
+    sp: 0,
+    elr_el1: 0,
+    spsr_el1: 0,
+    esr_el1: 0,
+    far_el1: 0,
+};
+
 // Public layout constants are materialized from Cyna's target C ABI metadata.
 // They are the Cyna-side source for trap-frame layout checks. The `export asm`
 // constants below are the assembly boundary; Cyna emits them as `.equ` values
@@ -116,6 +155,20 @@ pub fn diagnostic(esr_el1: c_ulong, elr_el1: c_ulong, far_el1: c_ulong, spsr_el1
         far_el1: far_el1 as usize,
         spsr_el1: spsr_el1 as usize,
     };
+}
+
+pub fn copy_frame_with_resume(frame: *TrapFrame, instruction_pointer: usize): TrapFrame {
+    unchecked {
+        var saved = *frame;
+        saved.elr_el1 = instruction_pointer as c_ulong;
+        return saved;
+    }
+}
+
+pub fn write_frame(destination: *TrapFrame, source: TrapFrame): void {
+    unchecked {
+        *destination = source;
+    }
 }
 
 pub fn diagnostic_from_frame(frame: *TrapFrame): ExceptionDiagnosticFrame {
