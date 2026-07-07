@@ -125,5 +125,14 @@ cory_arch_trigger_test_trap:
 .type cory_arch_yield_trap, @function
 cory_arch_yield_trap:
     # C ABI: void cory_arch_yield_trap(void)
+    li a0, 1
+    ebreak
+    ret
+
+.global cory_arch_block_trap
+.type cory_arch_block_trap, @function
+cory_arch_block_trap:
+    # C ABI: void cory_arch_block_trap(void)
+    li a0, 2
     ebreak
     ret

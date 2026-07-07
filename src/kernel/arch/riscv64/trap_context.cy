@@ -59,6 +59,24 @@ pub fn schedule_and_restore(raw_frame: *TrapFrame): bool {
     return true;
 }
 
+pub fn block_current_and_restore(raw_frame: *TrapFrame, resume_instruction_pointer: usize): bool {
+    const next = scheduler.block_current_saving_context(
+        resume_instruction_pointer,
+        trap_frame.stack_pointer_from_frame(raw_frame),
+        trap_frame.status_flags_from_frame(raw_frame)
+    );
+    if next == scheduler.invalid_thread {
+        last_status = status_schedule_failed;
+        return false;
+    }
+    if !write_resume_state_to_frame(next, raw_frame) {
+        return false;
+    }
+    last_status = status_restoring;
+    restore_from_frame(raw_frame);
+    return true;
+}
+
 pub fn restore_from_frame(raw_frame: *TrapFrame): void {
     cory_arch_trap_restore_from_frame(raw_frame);
 }

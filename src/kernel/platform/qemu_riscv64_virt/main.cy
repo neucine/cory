@@ -23,6 +23,7 @@ extern c("cory_riscv64_flush_kernel_tlb") fn flush_kernel_tlb(): void;
 extern c("cory_normal_thread_entry_addr") fn normal_thread_entry_addr(): c_ulong;
 extern c("cory_normal_thread_stack_top") fn normal_thread_stack_top(): c_ulong;
 extern c("cory_arch_yield_trap") fn yield_trap(): void;
+extern c("cory_arch_block_trap") fn block_trap(): void;
 
 const kernel_sstatus: usize = 0x0200000100;
 var normal_thread_id: usize = thread.invalid_id;
@@ -77,12 +78,10 @@ export c("cory_normal_thread") fn cory_normal_thread(): void {
     println("scheduler: normal thread yielding");
     yield_trap();
     println("scheduler: normal thread yield returned");
-    if !thread.mark_blocked(normal_thread_id) {
-        println("scheduler: normal thread block failed");
-        panic_mod.panic();
-    }
-    println("scheduler: normal thread blocked");
-    kernel.halt();
+    println("scheduler: normal thread blocking");
+    block_trap();
+    println("scheduler: normal thread block returned unexpectedly");
+    panic_mod.panic();
 }
 
 export c("cory_kernel_entry") fn cory_kernel_entry(): void {

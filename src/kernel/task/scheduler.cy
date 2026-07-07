@@ -158,6 +158,41 @@ pub fn schedule_next_saving_current(instruction_pointer: usize, stack_pointer: u
     return schedule_next();
 }
 
+pub fn block_current_saving_context(instruction_pointer: usize, stack_pointer: usize, status_flags: usize): usize {
+    const previous = current_thread;
+    const previous_entry = thread.get(previous);
+    if previous_entry.id == thread.invalid_id {
+        last_status = SchedulerStatus.invalid_thread;
+        return thread.invalid_id;
+    }
+    if previous_entry.state != ThreadState.running {
+        last_status = SchedulerStatus.not_ready;
+        return thread.invalid_id;
+    }
+    if queued_count == 0 {
+        last_status = SchedulerStatus.empty;
+        return thread.invalid_id;
+    }
+    if !context.save_resume_state(previous, instruction_pointer, stack_pointer, status_flags) {
+        last_status = SchedulerStatus.context_save_failed;
+        return thread.invalid_id;
+    }
+    if !thread.mark_blocked(previous) {
+        last_status = SchedulerStatus.invalid_thread;
+        return thread.invalid_id;
+    }
+
+    const next = dequeue();
+    if next == thread.invalid_id {
+        return thread.invalid_id;
+    }
+    if !set_current(next) {
+        return thread.invalid_id;
+    }
+    last_status = SchedulerStatus.ok;
+    return next;
+}
+
 pub fn count(): usize {
     return queued_count;
 }

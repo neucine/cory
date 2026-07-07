@@ -142,3 +142,10 @@ cory_arch_yield_trap:
     // C ABI: void cory_arch_yield_trap(void)
     brk #1
     ret
+
+.global cory_arch_block_trap
+.type cory_arch_block_trap, %function
+cory_arch_block_trap:
+    // C ABI: void cory_arch_block_trap(void)
+    brk #2
+    ret

@@ -12,6 +12,7 @@ extern c("cory_arch_abi_probe_value") fn cory_arch_abi_probe_value(): c_ulong;
 extern c("cory_arch_current_el") fn cory_arch_current_el(): c_ulong;
 
 const yield_brk_esr: usize = 0xf2000001;
+const block_brk_esr: usize = 0xf2000002;
 
 pub fn init(): void {
     if cory_arch_current_el() != 1 {
@@ -81,10 +82,31 @@ fn schedule_yield(raw_frame: *TrapFrame): void {
     panic_mod.panic();
 }
 
+fn schedule_block(raw_frame: *TrapFrame): void {
+    const resume_ip = trap_frame.instruction_pointer_from_frame(raw_frame) + 4;
+    println("scheduler: block trap");
+    println("scheduler: normal thread blocked");
+    if !trap_context.block_current_and_restore(raw_frame, resume_ip) {
+        println("exception: block schedule failed");
+        if trap_context.status() == trap_context.status_schedule_failed {
+            println("exception: schedule status failed");
+        }
+        if trap_context.status() == trap_context.status_resume_state_missing {
+            println("exception: resume state missing");
+        }
+        panic_mod.panic();
+    }
+    println("exception: block restore returned unexpectedly");
+    panic_mod.panic();
+}
+
 export c("cory_arch_sync_exception_entry") fn cory_arch_sync_exception_entry(raw_frame: *TrapFrame): void {
     const frame = trap_frame.diagnostic_from_frame(raw_frame);
     if tick.enabled() and frame.esr_el1 == yield_brk_esr {
         schedule_yield(raw_frame);
+    }
+    if tick.enabled() and frame.esr_el1 == block_brk_esr {
+        schedule_block(raw_frame);
     }
     report_unhandled(raw_frame);
 }

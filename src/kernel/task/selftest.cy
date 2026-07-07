@@ -707,6 +707,52 @@ pub fn run_scheduler_tests(kernel_process_id: usize, kernel_thread_id: usize): v
         fail("selftest: scheduler schedule back previous ready");
     }
 
+    const blocked_switch = scheduler.block_current_saving_context(0xd000, 0xe000, 0xf000);
+    if blocked_switch != ready_thread {
+        fail("selftest: scheduler block switch");
+    }
+    if scheduler.current() != ready_thread {
+        fail("selftest: scheduler block switch current");
+    }
+    if thread.get(kernel_thread_id).state != ThreadState.blocked {
+        fail("selftest: scheduler block previous");
+    }
+    const blocked_resume = context.get_resume_state(kernel_thread_id);
+    if !blocked_resume.valid {
+        fail("selftest: scheduler blocked resume valid");
+    }
+    if blocked_resume.instruction_pointer != 0xd000 {
+        fail("selftest: scheduler blocked resume ip");
+    }
+    if blocked_resume.stack_pointer != 0xe000 {
+        fail("selftest: scheduler blocked resume sp");
+    }
+    if blocked_resume.status_flags != 0xf000 {
+        fail("selftest: scheduler blocked resume flags");
+    }
+    if scheduler.count() != 0 {
+        fail("selftest: scheduler block switch count");
+    }
+    if !thread.mark_ready(kernel_thread_id) {
+        fail("selftest: scheduler unblock kernel");
+    }
+    if !scheduler.enqueue(kernel_thread_id) {
+        fail("selftest: scheduler enqueue unblocked kernel");
+    }
+    const restored_kernel = scheduler.schedule_next();
+    if restored_kernel != kernel_thread_id {
+        fail("selftest: scheduler restore blocked kernel");
+    }
+    if scheduler.current() != kernel_thread_id {
+        fail("selftest: scheduler restore blocked current");
+    }
+    if thread.get(kernel_thread_id).state != ThreadState.running {
+        fail("selftest: scheduler restored kernel running");
+    }
+    if thread.get(ready_thread).state != ThreadState.ready {
+        fail("selftest: scheduler restored previous ready");
+    }
+
     const dequeued = scheduler.dequeue();
     if dequeued != ready_thread {
         fail("selftest: scheduler dequeue ready");

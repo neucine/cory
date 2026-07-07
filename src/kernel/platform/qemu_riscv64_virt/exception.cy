@@ -11,6 +11,8 @@ extern c("cory_arch_trap_init") fn cory_arch_trap_init(): void;
 extern c("cory_arch_abi_probe_value") fn cory_arch_abi_probe_value(): c_ulong;
 
 const breakpoint_scause: usize = 3;
+const yield_trap_marker: usize = 1;
+const block_trap_marker: usize = 2;
 
 pub fn init(): void {
     if !trap_frame.verify_layout() {
@@ -48,10 +50,32 @@ fn schedule_yield(raw_frame: *TrapFrame): void {
     panic_mod.panic();
 }
 
+fn schedule_block(raw_frame: *TrapFrame): void {
+    const resume_ip = trap_frame.instruction_pointer_from_frame(raw_frame) + 4;
+    println("scheduler: block trap");
+    println("scheduler: normal thread blocked");
+    if !trap_context.block_current_and_restore(raw_frame, resume_ip) {
+        println("exception: block schedule failed");
+        if trap_context.status() == trap_context.status_schedule_failed {
+            println("exception: schedule status failed");
+        }
+        if trap_context.status() == trap_context.status_resume_state_missing {
+            println("exception: resume state missing");
+        }
+        panic_mod.panic();
+    }
+    println("exception: block restore returned unexpectedly");
+    panic_mod.panic();
+}
+
 export c("cory_arch_trap_entry") fn cory_arch_trap_entry(raw_frame: *TrapFrame): void {
     const frame = trap_frame.diagnostic_from_frame(raw_frame);
-    if tick.enabled() and frame.scause == breakpoint_scause {
+    const trap_marker = trap_frame.argument0_from_frame(raw_frame);
+    if tick.enabled() and frame.scause == breakpoint_scause and trap_marker == yield_trap_marker {
         schedule_yield(raw_frame);
+    }
+    if tick.enabled() and frame.scause == breakpoint_scause and trap_marker == block_trap_marker {
+        schedule_block(raw_frame);
     }
     if tick.enabled() {
         if interrupt.complete_timer_irq(frame.scause) {
