@@ -75,6 +75,11 @@ fn prepare_normal_thread(): void {
 
 export c("cory_normal_thread") fn cory_normal_thread(): void {
     println("scheduler: normal thread resumed");
+    if !thread.mark_blocked(normal_thread_id) {
+        println("scheduler: normal thread block failed");
+        panic_mod.panic();
+    }
+    println("scheduler: normal thread blocked");
     kernel.halt();
 }
 
