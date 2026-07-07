@@ -112,13 +112,13 @@ run_probe() {
 run_aarch64() {
   "$CYNA" check .
   "$CYNA" build .
-  run_qemu_expect aarch64 "memory: physical pages ready" "scheduler: normal thread blocked" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory.elf
+  run_qemu_expect aarch64 "scheduler: yield trap" "scheduler: normal thread blocked" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory.elf
 }
 
 run_riscv64() {
   "$CYNA" check cyna.riscv64.toml
   "$CYNA" build cyna.riscv64.toml
-  run_qemu_expect riscv64 "memory: physical pages ready" "scheduler: normal thread blocked" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-riscv64.elf
+  run_qemu_expect riscv64 "scheduler: yield trap" "scheduler: normal thread blocked" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-riscv64.elf
 }
 
 run_trap_aarch64() {

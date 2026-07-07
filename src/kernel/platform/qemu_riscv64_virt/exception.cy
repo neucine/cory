@@ -10,6 +10,8 @@ import .kernel.task.scheduler;
 extern c("cory_arch_trap_init") fn cory_arch_trap_init(): void;
 extern c("cory_arch_abi_probe_value") fn cory_arch_abi_probe_value(): c_ulong;
 
+const breakpoint_scause: usize = 3;
+
 pub fn init(): void {
     if !trap_frame.verify_layout() {
         println("exception: trap frame layout mismatch");
@@ -23,8 +25,34 @@ pub fn init(): void {
     println("exception: vectors ready");
 }
 
+fn schedule_yield(raw_frame: *TrapFrame): void {
+    const resume_ip = trap_frame.instruction_pointer_from_frame(raw_frame) + 4;
+    trap_frame.set_resume_state_in_frame(
+        raw_frame,
+        resume_ip,
+        trap_frame.stack_pointer_from_frame(raw_frame),
+        trap_frame.status_flags_from_frame(raw_frame)
+    );
+    println("scheduler: yield trap");
+    if !trap_context.schedule_and_restore(raw_frame) {
+        println("exception: yield schedule failed");
+        if trap_context.status() == trap_context.status_schedule_failed {
+            println("exception: schedule status failed");
+        }
+        if trap_context.status() == trap_context.status_resume_state_missing {
+            println("exception: resume state missing");
+        }
+        panic_mod.panic();
+    }
+    println("exception: yield restore returned unexpectedly");
+    panic_mod.panic();
+}
+
 export c("cory_arch_trap_entry") fn cory_arch_trap_entry(raw_frame: *TrapFrame): void {
     const frame = trap_frame.diagnostic_from_frame(raw_frame);
+    if tick.enabled() and frame.scause == breakpoint_scause {
+        schedule_yield(raw_frame);
+    }
     if tick.enabled() {
         if interrupt.complete_timer_irq(frame.scause) {
             const count = tick.record_delivery();

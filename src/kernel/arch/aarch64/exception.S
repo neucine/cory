@@ -135,3 +135,10 @@ cory_arch_trigger_test_trap:
     // Opt-in trap-test entry point. Normal boot entries do not call it.
     brk #0
     ret
+
+.global cory_arch_yield_trap
+.type cory_arch_yield_trap, %function
+cory_arch_yield_trap:
+    // C ABI: void cory_arch_yield_trap(void)
+    brk #1
+    ret

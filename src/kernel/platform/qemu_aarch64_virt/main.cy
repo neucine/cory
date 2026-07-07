@@ -24,6 +24,7 @@ import .kernel.task.thread;
 extern c("cory_aarch64_flush_kernel_tlb") fn flush_kernel_tlb(): void;
 extern c("cory_normal_thread_entry_addr") fn normal_thread_entry_addr(): c_ulong;
 extern c("cory_normal_thread_stack_top") fn normal_thread_stack_top(): c_ulong;
+extern c("cory_arch_yield_trap") fn yield_trap(): void;
 
 const kernel_spsr_el1: usize = 0x600003c5;
 var normal_thread_id: usize = thread.invalid_id;
@@ -75,6 +76,9 @@ fn prepare_normal_thread(): void {
 
 export c("cory_normal_thread") fn cory_normal_thread(): void {
     println("scheduler: normal thread resumed");
+    println("scheduler: normal thread yielding");
+    yield_trap();
+    println("scheduler: normal thread yield returned");
     if !thread.mark_blocked(normal_thread_id) {
         println("scheduler: normal thread block failed");
         panic_mod.panic();

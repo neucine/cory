@@ -196,7 +196,8 @@ proofs, plus normal scheduler-tick resume paths on both QEMU targets:
   periodic scheduler tick mode. RISC-V64 normal boot proves S-mode `time`
   readability, configures the Cory-owned M-mode timer shim, and enables
   supervisor timer delivery. Both targets queue a normal kernel worker, resume
-  it from a timer-driven scheduler tick after memory-ready, and have that worker
+  it from a timer-driven scheduler tick after memory-ready, let that worker
+  voluntarily yield through a synchronous trap, resume it again, and then have it
   mark itself blocked before halting.
 - The AArch64 platform interrupt module owns IRQ mask/unmask, GICv2
   acknowledge/EOI, and virtual timer IRQ completion helpers.
@@ -224,9 +225,10 @@ proofs, plus normal scheduler-tick resume paths on both QEMU targets:
   trap entrypoint and resumes one normal kernel worker.
 
 The important boundary: normal boot on both QEMU targets can run with scheduler
-tick mode enabled, resume one normal kernel worker, and leave that worker in a
-blocked metadata state before halting. There is still no voluntary context
-switch, long-running scheduler workload, or userspace policy.
+tick mode enabled, resume one normal kernel worker, switch away from that worker
+through a voluntary yield trap, resume it again, and leave it in a blocked
+metadata state before halting. There is still no long-running scheduler workload
+or userspace policy.
 
 ## Subsystem Direction
 
@@ -235,8 +237,8 @@ up to scheduler/userspace:
 
 - keep normal synchronous trap handling panic-only until recoverable trap
   dispatch has a real caller
-- add a real voluntary yield path so a resumed worker can trap/switch back to
-  another runnable thread instead of only updating metadata before halt
+- add a real block-and-switch path so a resumed worker can block and immediately
+  schedule another runnable thread instead of blocking only before halt
 - keep RISC-V timer delivery in the current Cory-owned M-mode shim unless a
   later SBI-style platform entry justifies a separate target
 - keep QEMU AArch64 and RISC-V64 boot checks green after every slice
