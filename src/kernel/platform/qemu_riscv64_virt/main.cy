@@ -1,6 +1,7 @@
 import .kernel.entry;
 import .kernel.arch.riscv64.context as riscv64_context;
 import .kernel.arch.riscv64.page_table;
+import .kernel.arch.riscv64.trap_context;
 import .kernel.bootstrap;
 import .kernel.kernel;
 import .kernel.platform.qemu_riscv64_virt.console;
@@ -65,6 +66,10 @@ fn prepare_normal_thread(entry_addr: usize, stack_top: usize): usize {
     }
     if !context.save_resume_state(thread_id, entry_addr, stack_top, kernel_sstatus) {
         println("scheduler: normal thread seed failed");
+        panic_mod.panic();
+    }
+    if !trap_context.seed_resume_frame(arch_context, entry_addr, stack_top, kernel_sstatus) {
+        println("scheduler: normal thread frame seed failed");
         panic_mod.panic();
     }
     if !scheduler.enqueue(thread_id) {

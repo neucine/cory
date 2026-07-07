@@ -38,6 +38,16 @@ fn save_arch_frame(arch_context_id: usize, raw_frame: *TrapFrame, instruction_po
     return true;
 }
 
+pub fn seed_resume_frame(arch_context_id: usize, instruction_pointer: usize, stack_pointer: usize, status_flags: usize): bool {
+    const index = index_for_arch_context(arch_context_id);
+    if index >= arch_context.max_contexts {
+        return false;
+    }
+    saved_frames[index] = trap_frame.frame_with_resume_state(instruction_pointer, stack_pointer, status_flags);
+    saved_frame_valid[index] = true;
+    return true;
+}
+
 fn write_arch_frame(arch_context_id: usize, raw_frame: *TrapFrame): bool {
     const index = index_for_arch_context(arch_context_id);
     if index >= arch_context.max_contexts {

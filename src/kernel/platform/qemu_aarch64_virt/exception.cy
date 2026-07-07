@@ -63,8 +63,7 @@ fn report_unhandled(raw_frame: *TrapFrame): void {
 }
 
 fn schedule_yield(raw_frame: *TrapFrame): void {
-    // Scheduler traps are kernel ABI wrappers; resume at the wrapper caller.
-    const resume_ip = trap_frame.return_address_from_frame(raw_frame);
+    const resume_ip = trap_frame.instruction_pointer_from_frame(raw_frame) + 4;
     trap_frame.set_resume_state_in_frame(
         raw_frame,
         resume_ip,
@@ -87,8 +86,7 @@ fn schedule_yield(raw_frame: *TrapFrame): void {
 }
 
 fn schedule_block(raw_frame: *TrapFrame): void {
-    // Scheduler traps are kernel ABI wrappers; resume at the wrapper caller.
-    const resume_ip = trap_frame.return_address_from_frame(raw_frame);
+    const resume_ip = trap_frame.instruction_pointer_from_frame(raw_frame) + 4;
     println("scheduler: block trap");
     println("scheduler: normal thread blocked");
     if !trap_context.block_current_and_restore(raw_frame, resume_ip) {

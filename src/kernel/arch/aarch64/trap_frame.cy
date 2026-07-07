@@ -165,6 +165,16 @@ pub fn copy_frame_with_resume(frame: *TrapFrame, instruction_pointer: usize): Tr
     }
 }
 
+pub fn frame_with_resume_state(instruction_pointer: usize, stack_pointer: usize, status_flags: usize): TrapFrame {
+    var frame = empty_frame_value;
+    unchecked {
+        frame.elr_el1 = instruction_pointer as c_ulong;
+        frame.sp = stack_pointer as c_ulong;
+        frame.spsr_el1 = status_flags as c_ulong;
+    }
+    return frame;
+}
+
 pub fn write_frame(destination: *TrapFrame, source: TrapFrame): void {
     unchecked {
         *destination = source;
@@ -191,12 +201,6 @@ pub fn instruction_pointer_from_frame(frame: *TrapFrame): usize {
 pub fn stack_pointer_from_frame(frame: *TrapFrame): usize {
     unchecked {
         return (*frame).sp as usize;
-    }
-}
-
-pub fn return_address_from_frame(frame: *TrapFrame): usize {
-    unchecked {
-        return (*frame).x30 as usize;
     }
 }
 

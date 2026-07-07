@@ -69,6 +69,10 @@ fn prepare_normal_thread(entry_addr: usize, stack_top: usize): usize {
         println("scheduler: normal thread seed failed");
         panic_mod.panic();
     }
+    if !trap_context.seed_resume_frame(arch_context, entry_addr, stack_top, kernel_spsr_el1) {
+        println("scheduler: normal thread frame seed failed");
+        panic_mod.panic();
+    }
     if !scheduler.enqueue(thread_id) {
         println("scheduler: normal thread enqueue failed");
         panic_mod.panic();

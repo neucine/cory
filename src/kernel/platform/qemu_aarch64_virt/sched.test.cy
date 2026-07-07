@@ -90,6 +90,10 @@ fn prepare_ready_thread(): void {
         println("schedtest: seed context failed");
         panic_mod.panic();
     }
+    if !trap_context.seed_resume_frame(arch_context, thread_b_entry, thread_b_stack, kernel_spsr_el1) {
+        println("schedtest: seed frame failed");
+        panic_mod.panic();
+    }
     if !scheduler.enqueue(thread_b_id) {
         println("schedtest: enqueue failed");
         panic_mod.panic();

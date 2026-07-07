@@ -1,5 +1,6 @@
 import .kernel.arch.aarch64.context as aarch64_context;
 import .kernel.arch.aarch64.page_table;
+import .kernel.arch.aarch64.trap_context;
 import .kernel.bootstrap;
 import .kernel.entry;
 import .kernel.kernel;
@@ -68,6 +69,10 @@ fn prepare_ready_thread(): void {
     }
     if !context.save_resume_state(thread_b_id, thread_b_entry, thread_b_stack, kernel_spsr_el1) {
         println("normalschedtest: seed context failed");
+        panic_mod.panic();
+    }
+    if !trap_context.seed_resume_frame(arch_context, thread_b_entry, thread_b_stack, kernel_spsr_el1) {
+        println("normalschedtest: seed frame failed");
         panic_mod.panic();
     }
     if !scheduler.enqueue(thread_b_id) {
