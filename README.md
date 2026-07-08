@@ -1,107 +1,109 @@
 # Cory
 
-**Cory** is pronounced **Core-ry**.
+**Cory** is a tiny Cyna-native kernel substrate for controlled hardware,
+product-specific operating environments, and imaging systems.
 
-Cory is a Cyna-native capability kernel substrate designed to demonstrate Cyna's systems-programming capabilities and eventually serve as the operating substrate for Raspberry Pi Compute Module 5 based camera and imaging hardware.
+It is pronounced **Core-ry**.
 
-Cory is not a Linux replacement, Unix clone, desktop OS, or general-purpose server OS. It is a small kernel substrate for controlled hardware, product-specific OS personalities, and imaging-oriented systems.
+Cory is not trying to become a Linux replacement, a Unix clone, a desktop OS, or
+a general-purpose server platform. It is a focused kernel foundation for devices
+where the OS personality should be small, explicit, capability-oriented, and
+close to the hardware.
 
-## Project identity
-
-```text
-Neucine  — ecosystem / organization
-Cyna     — systems programming language
-Cory     — Cyna-native kernel substrate, pronounced Core-ry
-```
-
-## Canonical specification
-
-The full project specification is in [`docs/SPEC.md`](docs/SPEC.md).
-For a shorter reader path through the current implementation, see
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-
-For the early phase of the project, `docs/SPEC.md` is the single source of truth. Sections can be split into separate docs later when the design becomes too large to edit comfortably.
-
-## GitHub language stats
-
-GitHub Linguist does not have first-class Cyna support yet, and `.cy` is
-currently claimed by Cycript in Linguist's language database. This repository
-uses `.gitattributes` to mark `.cy` files as Cyna while excluding them from
-GitHub language percentages until Cyna is supported upstream.
-
-## Repository layout
-
-```text
-src/kernel/           Platform-neutral kernel source
-src/kernel/arch/      CPU architecture entry and exception/trap assembly
-src/kernel/memory/    Physical memory, heap, VM, page tables, address spaces
-src/kernel/object/    Kernel object identity and capability authority
-src/kernel/platform/  Kernel-owned platform startup, memory maps, console, and linker scripts
-src/user/             Userspace source, intentionally empty until needed
-```
-
-`docs/SPEC.md` remains the place for planned structure. Source directories should
-exist when there is real code for that boundary.
-
-## Initial target platforms
-
-Cory has two hardware tracks:
-
-```text
-Product track:  AArch64 / Raspberry Pi Compute Module 5
-Research track: RISC-V64 / SiFive HiFive Unmatched
-```
-
-Initial development starts in QEMU:
-
-```text
-qemu-system-aarch64 -machine virt
-qemu-system-riscv64 -machine virt
-```
-
-x86_64 support is optional and may be added later, but it is not the first target.
-
-## MVP
-
-The first meaningful Cory demo is not a shell.
-
-It is a fake camera pipeline:
+The long-term product target is Raspberry Pi Compute Module 5 based camera and
+imaging hardware. The first meaningful demo is a camera-shaped pipeline rather
+than a shell:
 
 ```text
 FakeSensor -> FakeISP -> Preview -> StorageWriter
 ```
 
-The pipeline should run across isolated userspace services, communicate through capability-based IPC, move frame-like data using `SharedBuffer` objects, and report end-to-end latency through the trace system.
+That pipeline is intended to run across isolated userspace services, communicate
+through capability-based IPC, move frame-like data with shared buffers, and
+report end-to-end latency through kernel tracing.
 
-## Current progress
+## Why Cory Exists
 
-Cory currently boots both QEMU targets into kernel selftests:
+Cory is a place to prove Cyna as a systems programming language under the kind
+of pressure kernels create: freestanding code, explicit memory layout, CPU trap
+frames, page tables, interrupt delivery, object authority, and careful
+cross-architecture boundaries.
 
-- AArch64 `virt` starts at EL1, or drops EL2 to EL1 before common kernel entry.
-- RISC-V64 `virt` uses a small M-mode shim and enters the kernel in S-mode.
-- Both targets initialize trap vectors, capture full trap frames, and expose
-  resume-state helpers.
-- AArch64 separates synchronous exception and IRQ vector callbacks while
-  preserving one trap-frame layout; normal boot enables scheduler tick mode and
-  resumes a normal kernel worker from a periodic timer IRQ.
-- Memory bootstrap, bootstrap page tables, physical pages, heap, address-space
-  metadata, kernel object IDs, capabilities, process metadata, thread metadata,
-  and scheduler metadata all have boot-time selftests.
-- Opt-in probes validate deliberate traps, trap-frame restore with `eret`/`sret`,
-  and a trap-driven scheduler handoff on both targets. AArch64 also validates a
-  dry-run diagnostic tick, a timer-IRQ-driven scheduler handoff, and the normal
-  IRQ handler's scheduler tick branch in opt-in probes.
-- Timer groundwork exists on both targets; AArch64 also proves masked deadline
-  programming, configures the virtual timer IRQ route, enables periodic
-  scheduler tick delivery, and validates virtual timer IRQ delivery through QEMU
-  `virt` GICv2 INTID 27.
-
-Still intentionally missing: a long-running scheduler loop, userspace entry,
-syscalls, IPC, and shared buffers.
-
-## Build
+The project is deliberately narrow. A smaller kernel surface makes it possible
+to keep hardware policy, authority, scheduling, and data movement understandable
+as the imaging stack grows.
 
 ```text
+Neucine  — ecosystem / organization
+Cyna     — systems programming language
+Cory     — Cyna-native kernel substrate
+```
+
+## What Works Today
+
+Cory currently boots on both initial QEMU targets and exercises real kernel
+bring-up paths:
+
+- **AArch64** on `qemu-system-aarch64 -machine virt`
+- **RISC-V64** on `qemu-system-riscv64 -machine virt`
+
+Current boot images initialize console output, trap vectors, early memory,
+bootstrap page tables, physical pages, heap metadata, address spaces, kernel
+objects, capabilities, process metadata, thread metadata, scheduler metadata,
+and architecture context storage.
+
+The latest normal boot path on both QEMU targets can enable scheduler tick mode,
+resume a normal kernel worker, switch away from that worker through a voluntary
+yield trap, resume it again, and then switch away through a block trap that marks
+the worker blocked.
+
+Still intentionally missing:
+
+- long-running scheduler workloads
+- userspace entry
+- syscalls
+- IPC
+- shared buffers
+- the camera pipeline demo
+
+That gap is the point of the next phase: grow the kernel upward only after the
+authority and scheduling foundations are real enough to carry it.
+
+## Design Shape
+
+Cory is organized around a few firm boundaries:
+
+```text
+src/kernel/           Platform-neutral kernel source
+src/kernel/arch/      CPU architecture entry, traps, contexts, and page tables
+src/kernel/memory/    Physical memory, heap, VM, page tables, address spaces
+src/kernel/object/    Kernel object identity and capability authority
+src/kernel/task/      Processes, threads, contexts, scheduling metadata
+src/kernel/platform/  Board startup, memory maps, console, timers, interrupts
+src/user/             Userspace, intentionally empty until the first service
+```
+
+The detailed architecture walk-through lives in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The canonical design record is
+[`docs/SPEC.md`](docs/SPEC.md).
+
+## Target Tracks
+
+Cory has two hardware tracks:
+
+```text
+Product track:   AArch64 / Raspberry Pi Compute Module 5
+Research track:  RISC-V64 / SiFive HiFive Unmatched
+```
+
+Initial development happens in QEMU so both architecture paths can stay honest
+while the kernel is still small.
+
+## Build And Run
+
+You need a Cyna compiler and QEMU for the target you want to boot.
+
+```sh
 cyna version
 cyna check .
 cyna build .
@@ -109,7 +111,7 @@ cyna check cyna.riscv64.toml
 cyna build cyna.riscv64.toml
 ```
 
-Expected outputs:
+Expected normal outputs:
 
 ```text
 build/cory
@@ -120,128 +122,62 @@ build/cory-riscv64.elf
 build/cory-riscv64.bin
 ```
 
-The current kernel entries write to the QEMU `virt` UART, initialize exception
-or trap vectors, verify readable timer counters plus masked AArch64 deadline
-programming, configure the AArch64 timer IRQ route, enable periodic scheduler
-tick mode, run common bootstrap selftests through memory, VM, address spaces,
-and object/capability contracts, print `memory: physical pages ready`, then
-resume a normal AArch64 kernel worker from a timer-driven scheduler tick.
-When QEMU is available, run:
+Boot the normal images:
 
-```text
+```sh
 qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory.elf
 qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-riscv64.elf
 ```
 
-The common check/build/QEMU flows are wrapped by:
+Or use the bundled check runner:
 
-```text
+```sh
 tools/check.sh normal
-tools/check.sh traps
-tools/check.sh restore
-tools/check.sh sched
-tools/check.sh timerirq
-tools/check.sh timerdiag
-tools/check.sh timersched
-tools/check.sh normalsched
 tools/check.sh all
 ```
 
-Use `CYNA=/path/to/cyna tools/check.sh all` to test with a different compiler
-binary.
+Use a different compiler binary with:
 
-## Trap diagnostic probes
-
-Normal boot must not deliberately panic. Trap diagnostics are tested through
-separate opt-in probe images. `tools/check.sh` generates their temporary Cyna
-manifests from the target manifests:
-
-```text
-tools/check.sh trap-aarch64
-tools/check.sh trap-riscv64
+```sh
+CYNA=/path/to/cyna tools/check.sh all
 ```
 
-These images intentionally execute `brk` on AArch64 or `ebreak` on RISC-V64,
-print captured architecture trap state, then panic.
+## Probe Images
 
-## Restore diagnostic probes
+Cory keeps deliberate fault and restore experiments out of normal boot. The
+check runner builds temporary opt-in manifests for those probe images, boots
+them under QEMU, and checks for expected output.
 
-Restore probes validate the exception-return paths in opt-in images:
-
-```text
-tools/check.sh restore-aarch64
-tools/check.sh restore-riscv64
-```
-
-They trigger `brk` or `ebreak`, advance the saved return PC, restore from the
-trap frame, print a `restoretest: resumed ...` line, then intentionally panic.
-Normal boot and trap diagnostic images still use the panic-only trap path.
-
-## Trap scheduling probe
-
-Scheduler probes validate the first integrated trap scheduling handoff in
-opt-in images:
+Available probe groups:
 
 ```text
-tools/check.sh sched-aarch64
-tools/check.sh sched-riscv64
+tools/check.sh traps       # deliberate trap capture on both targets
+tools/check.sh restore     # exception return with eret/sret on both targets
+tools/check.sh sched       # trap-driven scheduler handoff on both targets
+tools/check.sh timerirq    # timer interrupt delivery on both targets
+tools/check.sh timerdiag   # AArch64 diagnostic tick policy
+tools/check.sh timersched  # timer-driven scheduler handoff on both targets
+tools/check.sh normalsched # AArch64 normal IRQ scheduler path
 ```
 
-They create a ready kernel thread, trigger `brk` or `ebreak` from the current
-thread, save the interrupted trap frame, schedule the ready thread, write that
-thread's saved resume state into the trap frame, restore with `eret` or `sret`,
-print `schedtest: thread b resumed`, then intentionally panic.
+For a full list of individual commands, run:
 
-## Timer IRQ probe
-
-The AArch64 timer IRQ probe validates virtual timer delivery through the QEMU
-`virt` GICv2 path:
-
-```text
-tools/check.sh timerirq-aarch64
+```sh
+tools/check.sh
 ```
 
-It configures the virtual timer PPI, unmasks IRQs, receives INTID 27, disarms
-the timer, prints `timerirqtest: received virtual timer irq`, then intentionally
-panics. Normal boot uses the same timer IRQ class for periodic scheduler ticks.
+## Reading Path
 
-## Diagnostic tick probe
+Start here:
 
-The AArch64 diagnostic tick probe validates the dry-run tick policy mode:
+1. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the current codebase
+2. [`docs/SPEC.md`](docs/SPEC.md) for the design intent
+3. [`tools/check.sh`](tools/check.sh) for the executable validation matrix
+4. `src/kernel/platform/*/main.cy` for each target's boot composition
 
-```text
-tools/check.sh timerdiag-aarch64
-```
+## GitHub Language Stats
 
-It enables tick delivery in diagnostic mode, receives INTID 27, disarms and EOIs
-the timer interrupt, prints `timerdiagtest: diagnostic tick`, then intentionally
-panics. It does not schedule.
-
-## Timer scheduling probe
-
-The AArch64 timer scheduling probe validates the first timer-driven
-schedule-and-restore handoff in an opt-in image:
-
-```text
-tools/check.sh timersched-aarch64
-```
-
-It creates a ready kernel thread, programs the virtual timer, receives INTID 27,
-disarms and EOIs the timer interrupt, schedules the ready thread from the saved
-trap frame, restores with `eret`, prints `timerschedtest: thread b resumed`,
-then intentionally panics.
-
-## Normal IRQ scheduler probe
-
-The AArch64 normal IRQ scheduler probe validates the scheduler branch in the
-normal platform IRQ handler:
-
-```text
-tools/check.sh normalsched-aarch64
-```
-
-It creates a ready kernel thread, enables scheduler tick delivery, receives the
-virtual timer IRQ through `exception.cy`, schedules from the saved trap frame,
-prints `tick: scheduler tick` and `normalschedtest: thread b resumed`, then
-intentionally panics. Normal boot enables the same periodic scheduler tick mode,
-and now queues a normal kernel worker that resumes from that path.
+GitHub Linguist does not have first-class Cyna support yet, and `.cy` is
+currently claimed by Cycript in Linguist's language database. This repository
+uses `.gitattributes` to mark `.cy` files as Cyna while excluding them from
+GitHub language percentages until Cyna is supported upstream.
