@@ -50,18 +50,36 @@ bring-up paths:
 Current boot images initialize console output, trap vectors, early memory,
 bootstrap page tables, physical pages, heap metadata, address spaces, kernel
 objects, capabilities, process metadata, thread metadata, scheduler metadata,
-and architecture context storage.
+architecture context storage, rooted user address-space metadata, inactive user
+process metadata, loader-owned user page mappings, ready user-shaped thread
+metadata, prepared user-mode context metadata, and probe-only user-mode
+exception returns through an active user address-space root switch.
 
 The latest normal boot path on both QEMU targets can enable scheduler tick mode,
-resume a normal kernel worker, switch away from that worker through a voluntary
-yield trap, resume it again, and then switch away through a block trap that marks
-the worker blocked.
+resume normal kernel workers, switch through voluntary yield/block traps, then
+load one minimal init image into an active user address-space root. That image
+is described by a small validated header whose entry and code span must fit
+inside the mapped image page. It traps back into the kernel for yield,
+debug-write, current process/thread identity, program inspection/spawn,
+wait/reap, and exit operations, proving the current scheduler/syscall
+vocabulary can cross the user/kernel boundary without a probe-only entry image.
+The yield syscall now returns an OK result to userspace before init issues a
+bounded debug-write syscall that validates and reads a user buffer, prints it,
+returns the byte count, reads its current process/thread ids, inspects and
+spawns a second prepared program, reaps its status, and then exits with status
+0 through a process-lifecycle syscall that schedules back to the remaining
+kernel worker. Kernel process metadata can now observe and reap exited
+processes by status code, and syscall `5` exposes that wait/reap operation to
+userspace by process id. Syscall `6` returns the current process id and thread
+id. Syscall `7` spawns a prepared program from the boot-time user program
+registry; program id `1` is the current child image. Syscall `8` inspects a
+registry entry before spawning it.
 
 Still intentionally missing:
 
 - long-running scheduler workloads
-- userspace entry
-- syscalls
+- user-returning syscalls beyond yield/debug-write
+- user ELF/process loading beyond the current one-page init image
 - IPC
 - shared buffers
 - the camera pipeline demo
@@ -74,13 +92,14 @@ authority and scheduling foundations are real enough to carry it.
 Cory is organized around a few firm boundaries:
 
 ```text
-src/kernel/           Platform-neutral kernel source
-src/kernel/arch/      CPU architecture entry, traps, contexts, and page tables
-src/kernel/memory/    Physical memory, heap, VM, page tables, address spaces
-src/kernel/object/    Kernel object identity and capability authority
-src/kernel/task/      Processes, threads, contexts, scheduling metadata
-src/kernel/platform/  Board startup, memory maps, console, timers, interrupts
-src/user/             Userspace, intentionally empty until the first service
+kernel/               Kernel project, manifests, source, and build outputs
+kernel/src/    Platform-neutral kernel source
+kernel/src/arch/      CPU architecture entry, traps, contexts, and page tables
+kernel/src/memory/    Physical memory, heap, VM, page tables, address spaces
+kernel/src/object/    Kernel object identity and capability authority
+kernel/src/task/      Processes, threads, contexts, scheduling metadata
+kernel/src/platform/  Board startup, memory maps, console, timers, interrupts
+user/                 User program project sources, manifests, and startup stubs
 ```
 
 The detailed architecture walk-through lives in
@@ -105,28 +124,28 @@ You need a Cyna compiler and QEMU for the target you want to boot.
 
 ```sh
 cyna version
-cyna check .
-cyna build .
-cyna check cyna.riscv64.toml
-cyna build cyna.riscv64.toml
+cyna check kernel/cyna.toml
+cyna build kernel/cyna.toml
+cyna check kernel/cyna.riscv64.toml
+cyna build kernel/cyna.riscv64.toml
 ```
 
 Expected normal outputs:
 
 ```text
-build/cory
-build/cory.elf
-build/cory.bin
-build/cory-riscv64
-build/cory-riscv64.elf
-build/cory-riscv64.bin
+kernel/build/cory
+kernel/build/cory.elf
+kernel/build/cory.bin
+kernel/build/cory-riscv64
+kernel/build/cory-riscv64.elf
+kernel/build/cory-riscv64.bin
 ```
 
 Boot the normal images:
 
 ```sh
-qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel build/cory.elf
-qemu-system-riscv64 -machine virt -nographic -bios none -kernel build/cory-riscv64.elf
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory.elf
+qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-riscv64.elf
 ```
 
 Or use the bundled check runner:
@@ -158,6 +177,7 @@ tools/check.sh timerirq    # timer interrupt delivery on both targets
 tools/check.sh timerdiag   # AArch64 diagnostic tick policy
 tools/check.sh timersched  # timer-driven scheduler handoff on both targets
 tools/check.sh normalsched # AArch64 normal IRQ scheduler path
+tools/check.sh userret     # probe-only user-mode exception return
 ```
 
 For a full list of individual commands, run:
@@ -173,7 +193,7 @@ Start here:
 1. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the current codebase
 2. [`docs/SPEC.md`](docs/SPEC.md) for the design intent
 3. [`tools/check.sh`](tools/check.sh) for the executable validation matrix
-4. `src/kernel/platform/*/main.cy` for each target's boot composition
+4. `kernel/src/platform/*/main.cy` for each target's boot composition
 
 ## GitHub Language Stats
 

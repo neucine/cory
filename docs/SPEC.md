@@ -1051,17 +1051,28 @@ Current status:
 - An opt-in AArch64 normal IRQ scheduler probe sends an enabled timer tick
   through the normal platform IRQ entrypoint, which completes the IRQ and calls
   the target-local schedule-and-restore path.
-- Current next kernel slice: decide whether the normal AArch64 worker should
-  gain a clean yield/block path, or move sideways to specify and probe the
-  RISC-V64 timer ownership path without forcing it into the AArch64 GIC/tick
-  shape.
+- Current kernel slice completed: normal boot on both QEMU targets can load one
+  one-page init image through the active address-space switch path and decode
+  its yield/debug-write/current/exit traps as user-origin syscall requests. The
+  yield request returns an OK result to the same user frame; a bounded
+  debug-write request validates and reads a user buffer before returning the
+  byte count; syscall `6` returns the current process id and thread id; syscall
+  `7` spawns program id `1` from a boot-time registry of prepared inactive user
+  images; syscall `8` inspects that registry entry before spawn; the parent can
+  reap that child's status through syscall `5`, and then exit. The exit request
+  records the status code, marks the current process inactive/exited, marks its
+  thread dead, and schedules back to the next runnable thread. The normal init
+  and child assembly now use named target-local syscall/user-buffer macros
+  instead of raw syscall trap blocks at each call site, with syscall numbers
+  exported from `syscall.cy` into the generated assembly include.
 - Cyna gaps identified by kernel slotmap work were reproduced and fixed
   upstream: mutable references to module globals work for this path, and
   freestanding aggregate lowering has memory helper support.
 - Kernel object IDs and capability IDs use bounded slotmap handles; fixed
   object/capability tables, basic capability rights checks, and capability
   duplication exist.
-- Scheduler, userspace, IPC, and shared buffers are not implemented.
+- Long-running scheduler workloads, a complete syscall ABI, IPC, and shared
+  buffers are not implemented.
 
 ### Phase 0 — Specification and Repo Shape
 
@@ -1262,8 +1273,8 @@ Deliverables:
 - opt-in trap-frame restore probes: done for AArch64 and RISC-V64
 - opt-in trap-driven scheduler handoff probes: done for AArch64 and RISC-V64
 - timer interrupt: AArch64 diagnostic delivery and opt-in scheduler handoff done
-- context switch: diagnostic trap-frame restore exists; normal scheduling path
-  not done
+- context switch: trap-frame restore and normal scheduler handoff done for
+  kernel workers and one fixed userspace workload
 - scheduler loop
 - sleep/wakeup
 - basic priority
@@ -1280,12 +1291,12 @@ Run the first userspace process.
 Deliverables:
 
 - user address space
-- executable loader
+- executable loader: initial one-page `UserImageHeader` path with entry/span validation done
 - syscall entry/exit
-- user memory validation
+- user memory validation: initial bounds/overflow/debug-copy checks done
 - process object
-- init process
-- debug output syscall or debug channel
+- init process: initial active process metadata, wait/reap, and exit-status lifecycle done
+- debug output syscall or debug channel: first bounded debug-write syscall done
 
 ### Phase 8 — IPC and Events
 

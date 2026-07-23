@@ -66,7 +66,12 @@ memory/selftest.cy, object/selftest.cy, task/selftest.cy, arch/selftest.cy
   packed index/generation key rules.
 - `memory/address_space.cy` uses bounded slotmap keys for address-space IDs,
   while object and capability IDs record the authority backing each address
-  space.
+  space. Kernel bootstrap creates the active kernel address space; rooted user
+  address spaces can now be represented as inactive metadata with a real root
+  table and user mapping policy, before user entry is enabled.
+- `memory/user_loader.cy` owns the narrow loader path for populating rooted user
+  address spaces. It checks address-space capability authority and user mapping
+  policy before dispatching to architecture-local page-table writers.
 - `task/capability_space.cy` is a process-local handle table over global
   capabilities. Removing a local slot does not release the global capability;
   released global capabilities are treated as stale local handles and cleared
@@ -79,14 +84,34 @@ memory/selftest.cy, object/selftest.cy, task/selftest.cy, arch/selftest.cy
   capability slots. Active processes cannot be released; inactive process
   teardown clears the owner row, releases the process root capability, releases
   the duplicated address-space capability, and releases the backing object.
+  Inactive user processes can now be created only for rooted user address
+  spaces, and they receive duplicated address-space authority with `inspect |
+  map` rights rather than kernel `manage` authority.
 - `task/thread.cy` installs each thread's root capability into its owning
   process capability space. Thread IDs are bounded slotmap keys, so thread
-  liveness, lookup, and public handles share one vocabulary.
+  liveness, lookup, and public handles share one vocabulary. User-shaped ready
+  threads carry nonzero entry and stack metadata.
 - `task/context.cy` stores common thread-context descriptors behind bounded
   slotmap keys. The descriptor records its own context key plus the
   architecture-specific context key owned by `arch/*/context.cy`. Thread
   lookups use the decoded thread slot index and then validate the exact thread
-  key generation before returning a context.
+  key generation before returning a context. User context attachment seeds
+  architecture-owned user-mode status flags from the thread entry/stack
+  metadata. Probe images and the normal boot workload can enter those contexts.
+- `task/user_entry.cy` owns reusable preparation for a minimal mapped user
+  image: it creates a rooted user address space, user process, ready user
+  thread, loader-owned code/stack mappings, and architecture context. The
+  returned plan records both the bootstrap root and the user root, and mirrors
+  kernel-only bootstrap mappings into the user root so probe images or normal
+  init can switch the active hardware translation root before returning to user
+  mode. Probe callers keep the process inactive; normal boot asks for an active
+  init process.
+- `task/user_program.cy` is the first tiny user-program registry. Platform boot
+  prepares user images while physical memory is still directly reachable,
+  registers inactive ready processes by numeric program id, and syscall `7`
+  looks up that registry before activating and queueing a program. Syscall `8`
+  exposes the same registry lookup to userspace so init can discover a program's
+  prepared process/thread ids before spawning it.
 - `kernel/selftest.cy` should stay a small facade. Put new checks beside the
   subsystem they exercise.
 - Architecture descriptor modules that are imported by common cross-arch tests
@@ -132,10 +157,10 @@ Platform code performs the final MMU register switch because the activation
 symbols and registers are architecture-specific. Common bootstrap code prepares
 the architecture-neutral plan and verifies it through selftests.
 
-The only real address space created during bootstrap is the kernel address
-space. User-shaped address spaces currently appear only as unrooted policy
-fixtures in selftests; real userspace address spaces arrive with process and
-loader work.
+The only active address space created during bootstrap is the kernel address
+space. Selftests also create rooted inactive user address spaces, inactive user
+processes, and ready user-shaped threads so that the object/capability boundary
+is already exercised before loader and user-entry work begins.
 
 ## ABI Boundaries
 
@@ -162,9 +187,12 @@ Current ABI groups:
 - CPU register helpers: platform timer, interrupt, exception, and VM activation
   modules import small architecture assembly helpers for registers that Cyna
   should not encode directly.
+- Address-space switch helpers: platform VM activation modules import tiny
+  architecture symbols for changing AArch64 `TTBR0_EL1` or RISC-V64 `satp` once
+  a user root has kernel mappings installed.
 - Probe-only symbols: scheduler and trap tests export or import extra ABI
-  entrypoints such as deliberate trap triggers, probe thread entries, and stack
-  helpers. These should not set the production boundary.
+  entrypoints such as deliberate trap triggers, probe thread entries, user-mode
+  trap stubs, and stack helpers. These should not set the production boundary.
 
 When a new boundary is needed, prefer this order:
 
@@ -195,10 +223,11 @@ proofs, plus normal scheduler-tick resume paths on both QEMU targets:
   deadline programming, then configures the virtual timer IRQ route and enables
   periodic scheduler tick mode. RISC-V64 normal boot proves S-mode `time`
   readability, configures the Cory-owned M-mode timer shim, and enables
-  supervisor timer delivery. Both targets queue a normal kernel worker, resume
-  it from a timer-driven scheduler tick after memory-ready, let that worker
-  voluntarily yield through a synchronous trap, resume it again, and then block
-  it through a second trap that immediately schedules another runnable thread.
+  supervisor timer delivery. Both targets queue two normal kernel workers,
+  resume one from a timer-driven scheduler tick after memory-ready, let that
+  worker voluntarily yield through a synchronous trap, resume the second worker,
+  block that second worker through another trap, then resume the first worker
+  and let it yield once more with an empty run queue.
 - The AArch64 platform interrupt module owns IRQ mask/unmask, GICv2
   acknowledge/EOI, and virtual timer IRQ completion helpers.
 - The AArch64 tick policy module owns timer tick delivery state. Normal boot
@@ -225,24 +254,82 @@ proofs, plus normal scheduler-tick resume paths on both QEMU targets:
   trap entrypoint and resumes one normal kernel worker.
 - Normal yield/block operations are decoded as target-local scheduler traps.
   AArch64 uses `brk` immediates; RISC-V64 uses an `ebreak` plus a saved argument
-  marker. The dispatch still lives in platform exception code until a broader
-  syscall surface exists.
+  number. The concrete trap encoding still lives in platform exception code,
+  which converts target trap state into syscall numbers; `syscall.cy` owns the
+  shared request, number-to-operation vocabulary, and decode status that a
+  broader syscall surface can grow from. Syscall requests now carry four
+  argument slots and an explicit origin, and syscall results have a small
+  value/error shape, although current scheduler operations still restore
+  directly instead of returning. The assembly-backed normal init and child
+  images use tiny target-local syscall and user-buffer macros so the raw
+  `brk`/`ecall` encodings stay named at each call site. Syscall numbers are
+  exported from `syscall.cy` into the generated assembly include, so assembly
+  callers do not carry a separate syscall-number table.
+- Rooted user address-space metadata, inactive user process metadata, and ready
+  user-shaped thread metadata are now represented and selftested. The loader can
+  map user pages into rooted user address spaces on both page-table formats,
+  rejecting duplicate, kernel-range, kernel-right, and wrong-capability
+  attempts. User process creation preserves the address-space capability
+  boundary by duplicating only `inspect | map` rights, and user thread creation
+  records entry/stack metadata. User-mode context attachment now seeds common
+  and architecture-local context state with target-owned user return flags,
+  and opt-in user-return probes can restore into one mapped user trap stub and
+  catch its trap back in the kernel on both QEMU targets.
+- AArch64 restore now distinguishes kernel and EL0 returns by loading `SP_EL0`
+  for EL0t status flags. The RISC-V64 trap vector now uses `sscratch` to switch
+  from an interrupted user stack to the kernel trap stack before saving the
+  frame, so its user-return probe runs with a mapped user stack.
+- User-return probe setup is now factored through `task/user_entry.cy` instead
+  of duplicated in each platform test. The prepared user root now mirrors
+  kernel-only bootstrap mappings, and both user-return probes switch the active
+  root to that user root before restoring into user mode. AArch64 switches
+  `TTBR0_EL1`; RISC-V64 switches `satp`.
+- Normal boot now prepares one minimal init image with `task/user_entry.cy`.
+  The current image payload is still assembly-backed and one page, but it is
+  discovered through a tiny validated `UserImageHeader` before becoming a
+  `UserImage` load plan. The image contract rejects entries inside the header,
+  entries past the code span, and spans that would cross the single mapped image
+  page. The loader maps the image into both the active bootstrap root and the
+  rooted user address space, activates the resulting init process, switches to
+  that user root when the scheduler selects the thread, and handles yield,
+  debug-write, and exit through the shared syscall request vocabulary. The user
+  yield syscall writes a small result ABI into the saved frame and returns to
+  the same user thread. The debug-write syscall validates a bounded user range,
+  reads bytes from the active user mapping, writes them to the console, and
+  returns the byte count. RISC-V64 opens `sstatus.SUM` only around that
+  validated user read. The process-exit syscall stores the supplied exit code,
+  marks the current user process inactive/exited, marks its thread dead, selects
+  the next runnable thread, switches back to that thread's address-space root,
+  and restores it. Kernel process metadata can wait on an exited process to
+  observe its code, then reap it through the existing release path. Syscall `5`
+  dispatches this wait/reap operation for user-origin requests, returning
+  specific invalid-process or not-exited errors. A small boot-time user-program
+  registry records prepared inactive user images; syscall `8` inspects program
+  id `1`, and syscall `7` activates and front-queues it, allowing init to spawn
+  a child, wait for its exit code, and then exit itself. The normal-user handoff
+  stops scheduler timer delivery first so this proof is driven by explicit
+  userspace traps instead of a racing tick.
+- `memory/user_memory.cy` owns the first user-buffer policy: process/address
+  space lookup, overflow checks, user-range checks, a fixed debug-copy limit,
+  and bounded byte streaming from user memory. It deliberately does not yet walk
+  page tables after the active root has switched to a user root; a later
+  kernel-mapped page-table window can make mapping validation stronger.
 
-The important boundary: normal boot on both QEMU targets can run with scheduler
-tick mode enabled, resume one normal kernel worker, switch away from that worker
-through a voluntary yield trap, resume it again, and switch away through a block
-trap that marks the worker blocked. There is still no long-running scheduler
-workload or userspace policy.
+The important boundary: normal boot on both QEMU targets can now move from
+timer-driven kernel scheduling into one active-root userspace workload and back
+through decoded user traps that return for yield, debug-write, and current
+process/thread identity. The init image can also inspect and spawn program id
+`1` from the boot-time registry, reap its exit status, and then exit through a
+trap that schedules away. There is still no long-running scheduler workload,
+general user loader, complete syscall ABI, or shell/runtime process model.
 
 ## Subsystem Direction
 
 Near-term work should make existing layers easier to reason about before moving
 up to scheduler/userspace:
 
-- keep normal synchronous trap handling panic-only until recoverable trap
-  dispatch has a real caller
-- decide whether the next slice should grow a second normal worker or factor the
-  target-local scheduler trap dispatch into a broader syscall surface
+- extend the yield/debug-write syscall result path into a broader syscall ABI
+- grow from the one-page init image toward a real image format and init handoff
 - keep RISC-V timer delivery in the current Cory-owned M-mode shim unless a
   later SBI-style platform entry justifies a separate target
 - keep QEMU AArch64 and RISC-V64 boot checks green after every slice

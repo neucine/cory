@@ -2,6 +2,8 @@
 
 # Build outputs
 /build/
+/kernel/build/
+/user/build/
 /out/
 /dist/
 

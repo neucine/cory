@@ -1,0 +1,15 @@
+name = "cory-user-child-aarch64"
+entry = "src/child.cy"
+
+[build]
+target = "aarch64-none-elf"
+cpu = "generic"
+opt = "release"
+emit = ["elf", "bin"]
+
+[link]
+script = "src/arch/aarch64/user.ld"
+entry_symbol = "cory_user_image_header"
+
+[asm]
+sources = ["src/arch/aarch64/start.S"]
