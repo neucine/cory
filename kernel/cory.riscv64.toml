@@ -1,6 +1,6 @@
 name = "cory-riscv64"
 src = "src"
-entry = "src/platform/qemu_riscv64_virt/main.cy"
+entry = "src/main.riscv64.cy"
 
 [build]
 target = "riscv64-none-elf"

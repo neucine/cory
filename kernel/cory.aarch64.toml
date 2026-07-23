@@ -1,6 +1,6 @@
 name = "cory"
 src = "src"
-entry = "src/platform/qemu_aarch64_virt/main.cy"
+entry = "src/main.aarch64.cy"
 
 [build]
 target = "aarch64-none-elf"

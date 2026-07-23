@@ -124,10 +124,10 @@ You need a Cyna compiler and QEMU for the target you want to boot.
 
 ```sh
 cyna version
-cyna check kernel/cyna.toml
-cyna build kernel/cyna.toml
-cyna check kernel/cyna.riscv64.toml
-cyna build kernel/cyna.riscv64.toml
+cyna check kernel/cory.aarch64.toml
+cyna build kernel/cory.aarch64.toml
+cyna check kernel/cory.riscv64.toml
+cyna build kernel/cory.riscv64.toml
 ```
 
 Expected normal outputs:

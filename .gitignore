@@ -12,6 +12,7 @@
 *.trace
 *.dump
 .cory-*.toml
+/kernel/src/.cory-*.cy
 
 # Tool caches
 /.cache/
