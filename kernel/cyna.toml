@@ -1,0 +1,32 @@
+name = "cory"
+src = "src"
+
+[build]
+default = "aarch64"
+kind = "exe"
+opt = "release"
+emit = ["elf", "bin"]
+
+[build.aarch64]
+entry = "src/main.aarch64.cy"
+target = "aarch64-none-elf"
+cpu = "generic"
+
+[link.aarch64]
+script = "src/platform/qemu_aarch64_virt/link.ld"
+entry_symbol = "_start"
+
+[asm.aarch64]
+sources = ["src/arch/aarch64/start.S", "src/arch/aarch64/exception.S", "src/platform/qemu_aarch64_virt/normal_thread.S", "src/platform/qemu_aarch64_virt/user_programs.S"]
+
+[build.riscv64]
+entry = "src/main.riscv64.cy"
+target = "riscv64-none-elf"
+cpu = "generic-rv64"
+
+[link.riscv64]
+script = "src/platform/qemu_riscv64_virt/link.ld"
+entry_symbol = "_start"
+
+[asm.riscv64]
+sources = ["src/arch/riscv64/start.S", "src/arch/riscv64/trap.S", "src/platform/qemu_riscv64_virt/normal_thread.S", "src/platform/qemu_riscv64_virt/user_programs.S"]

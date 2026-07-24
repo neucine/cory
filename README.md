@@ -124,18 +124,18 @@ You need a Cyna compiler and QEMU for the target you want to boot.
 
 ```sh
 cyna version
-cyna check kernel/cory.aarch64.toml
-cyna build kernel/cory.aarch64.toml
-cyna check kernel/cory.riscv64.toml
-cyna build kernel/cory.riscv64.toml
+cyna check kernel/cyna.toml --build aarch64
+cyna build kernel/cyna.toml --build aarch64
+cyna check kernel/cyna.toml --build riscv64
+cyna build kernel/cyna.toml --build riscv64
 ```
 
 Expected normal outputs:
 
 ```text
-kernel/build/cory
-kernel/build/cory.elf
-kernel/build/cory.bin
+kernel/build/cory-aarch64
+kernel/build/cory-aarch64.elf
+kernel/build/cory-aarch64.bin
 kernel/build/cory-riscv64
 kernel/build/cory-riscv64.elf
 kernel/build/cory-riscv64.bin
@@ -144,7 +144,7 @@ kernel/build/cory-riscv64.bin
 Boot the normal images:
 
 ```sh
-qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory.elf
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-aarch64.elf
 qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-riscv64.elf
 ```
 
