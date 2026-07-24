@@ -12,6 +12,7 @@ import .platform.qemu_riscv64_virt.tick;
 import .platform.qemu_riscv64_virt.timer;
 import .platform.qemu_riscv64_virt.vm_activation;
 import .memory.address_space;
+import .memory.map as memory_map;
 import .memory.phys;
 import .memory.vm;
 import .panic as panic_mod;
@@ -32,6 +33,8 @@ extern c("cory_normal_thread_b_stack_top") fn normal_thread_b_stack_top(): c_ulo
 extern c("cory_normal_user_image_addr") fn normal_user_image_addr(): c_ulong;
 extern c("cory_normal_child_user_image_addr") fn normal_child_user_image_addr(): c_ulong;
 extern c("cory_normal_shell_user_image_addr") fn normal_shell_user_image_addr(): c_ulong;
+extern c("cory_normal_echo_user_image_addr") fn normal_echo_user_image_addr(): c_ulong;
+extern c("cory_normal_ps_user_image_addr") fn normal_ps_user_image_addr(): c_ulong;
 extern c("cory_arch_yield_trap") fn yield_trap(): void;
 extern c("cory_arch_block_trap") fn block_trap(): void;
 
@@ -53,6 +56,18 @@ export c("cory_heap_map_virtual_page") fn cory_heap_map_virtual_page(virtual_add
     }
     flush_kernel_tlb();
     return phys_page as c_ulong;
+}
+
+export c("cory_identity_map_page") fn cory_identity_map_page(phys_addr: c_ulong): c_ulong {
+    const page = phys_addr as usize;
+    if page_table.lookup_bootstrap_phys(page_table.spec(), page) == page {
+        return 1;
+    }
+    if !page_table.map_bootstrap_page(page_table.spec(), page, page, vm.rights_kernel_rw()) {
+        return 0;
+    }
+    flush_kernel_tlb();
+    return 1;
 }
 
 export c("cory_switch_thread_address_space") fn cory_switch_thread_address_space(raw_thread_id: c_ulong): void {
@@ -189,6 +204,27 @@ fn prepare_shell_user_thread(active_root: usize): usize {
     return plan.thread_id;
 }
 
+fn register_echo_user_program(): void {
+    const image = user_entry.image_from_header(normal_echo_user_image_addr() as usize);
+    if !user_program.register_or_refresh_image(3, image) {
+        println("userspace: echo user register failed riscv64");
+        panic_mod.panic();
+    }
+}
+
+fn register_ps_user_program(): void {
+    const image = user_entry.image_from_header(normal_ps_user_image_addr() as usize);
+    if !user_program.register_or_refresh_image(4, image) {
+        println("userspace: ps user register failed riscv64");
+        panic_mod.panic();
+    }
+}
+
+export c("cory_refresh_builtin_user_images") fn cory_refresh_builtin_user_images(): void {
+    register_echo_user_program();
+    register_ps_user_program();
+}
+
 export c("cory_normal_thread_a") fn cory_normal_thread_a(): void {
     println("scheduler: normal thread a resumed");
     println("scheduler: normal thread a yielding");
@@ -239,6 +275,8 @@ export c("cory_kernel_entry") fn cory_kernel_entry(): void {
         println("userspace: shell user thread failed riscv64");
         panic_mod.panic();
     }
+    register_echo_user_program();
+    register_ps_user_program();
     if !scheduler.enqueue(normal_user_thread_id) {
         println("userspace: normal user enqueue failed riscv64");
         panic_mod.panic();

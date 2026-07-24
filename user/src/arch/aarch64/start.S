@@ -20,6 +20,15 @@ cory_user_start:
 1:
     b 1b
 
+.global cory_user_yield
+.type cory_user_yield, %function
+cory_user_yield:
+    adr x1, 7f
+    brk #1
+7:
+    mov x0, x1
+    ret
+
 .global cory_user_debug_write
 .type cory_user_debug_write, %function
 cory_user_debug_write:
@@ -27,6 +36,85 @@ cory_user_debug_write:
     adr x1, 2f
     brk #3
 2:
+    mov x0, x1
+    ret
+
+.global cory_user_console_read
+.type cory_user_console_read, %function
+cory_user_console_read:
+    mov x2, x1
+    adr x1, 4f
+    brk #9
+4:
+    mov x0, x1
+    ret
+
+.global cory_user_console_write
+.type cory_user_console_write, %function
+cory_user_console_write:
+    mov x2, x1
+    adr x1, 5f
+    brk #10
+5:
+    mov x0, x1
+    ret
+
+.global cory_user_process_list
+.type cory_user_process_list, %function
+cory_user_process_list:
+    adr x1, 6f
+    brk #11
+6:
+    mov x0, x1
+    ret
+
+.global cory_user_process_current
+.type cory_user_process_current, %function
+cory_user_process_current:
+    adr x1, 8f
+    brk #6
+8:
+    mov x0, x1
+    ret
+
+.global cory_user_program_inspect
+.type cory_user_program_inspect, %function
+cory_user_program_inspect:
+    adr x1, 9f
+    brk #8
+9:
+    mov x0, x1
+    ret
+
+.global cory_user_process_spawn
+.type cory_user_process_spawn, %function
+cory_user_process_spawn:
+    mov x3, x2
+    mov x2, x1
+    adr x1, 10f
+    brk #7
+10:
+    mov x0, x1
+    ret
+
+.global cory_user_process_arg_read
+.type cory_user_process_arg_read, %function
+cory_user_process_arg_read:
+    mov x2, x1
+    adr x1, 12f
+    brk #12
+12:
+    mov x0, x1
+    ret
+
+.global cory_user_process_wait
+.type cory_user_process_wait, %function
+cory_user_process_wait:
+    mov x2, x1
+    adr x1, 11f
+    brk #5
+11:
+    mov x0, x1
     ret
 
 .global cory_user_exit

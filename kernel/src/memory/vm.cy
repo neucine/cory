@@ -20,6 +20,8 @@ pub const rights_user: u8 = 8;
 // virtual range. The concrete base depends on the active page-table geometry.
 pub const kernel_heap_virtual_offset: usize = 0x40000000;
 pub const kernel_heap_virtual_size: usize = 0x04000000;
+pub const user_virtual_base: usize = 0x10000000;
+pub const user_virtual_size: usize = 0x10000000;
 
 pub struct MappingRequest {
     pub virt_start: VirtAddr;
@@ -147,7 +149,17 @@ pub fn kernel_virtual_base_for_spec(spec: Spec): VirtAddr {
 }
 
 pub fn user_virtual_base_for_spec(spec: Spec): VirtAddr {
-    return 0;
+    if spec.virtual_address_bits == 0 {
+        return 0;
+    }
+    if spec.virtual_address_bits >= (8 * 8) {
+        return 0;
+    }
+    const lower_half_size = 1 << (spec.virtual_address_bits - 1);
+    if user_virtual_base + user_virtual_size > lower_half_size {
+        return 0;
+    }
+    return user_virtual_base;
 }
 
 pub fn user_virtual_end_for_spec(spec: Spec): VirtAddr {
@@ -157,7 +169,11 @@ pub fn user_virtual_end_for_spec(spec: Spec): VirtAddr {
     if spec.virtual_address_bits >= (8 * 8) {
         return 0;
     }
-    return 1 << (spec.virtual_address_bits - 1);
+    const base = user_virtual_base_for_spec(spec);
+    if base == 0 {
+        return 0;
+    }
+    return base + user_virtual_size;
 }
 
 pub fn kernel_heap_virtual_base_for_spec(spec: Spec): VirtAddr {
@@ -543,6 +559,41 @@ pub fn mapping_request(index: usize): MappingRequest {
         return empty_mapping_request();
     }
     return mapping_requests[index];
+}
+
+pub fn mapping_request_virt_start(index: usize): VirtAddr {
+    if index >= used_mapping_requests {
+        return 0;
+    }
+    return mapping_requests[index].virt_start;
+}
+
+pub fn mapping_request_phys_start(index: usize): PhysAddr {
+    if index >= used_mapping_requests {
+        return 0;
+    }
+    return mapping_requests[index].phys_start;
+}
+
+pub fn mapping_request_size(index: usize): usize {
+    if index >= used_mapping_requests {
+        return 0;
+    }
+    return mapping_requests[index].size;
+}
+
+pub fn mapping_request_rights(index: usize): u8 {
+    if index >= used_mapping_requests {
+        return 0;
+    }
+    return mapping_requests[index].rights;
+}
+
+pub fn mapping_request_kind(index: usize): i32 {
+    if index >= used_mapping_requests {
+        return memory_map.kind_free_ram;
+    }
+    return mapping_requests[index].kind;
 }
 
 pub fn validate_kernel_heap_range(spec: Spec): bool {

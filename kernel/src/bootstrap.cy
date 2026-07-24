@@ -9,6 +9,7 @@ import { Layout } from .memory.layout;
 import .memory.boot as boot_memory;
 import .memory.map as memory_map;
 import .memory.page_table;
+import .memory.page_table_pages;
 import { Spec } from .memory.page_table;
 import .memory.phys;
 import .memory.vm;
@@ -19,6 +20,8 @@ import .selftest;
 import .task.capability_space;
 import .task.context;
 import .task.process;
+import .task.process_arg;
+import .task.process_resources;
 import .task.scheduler;
 import .task.thread;
 import .task.user_program;
@@ -36,6 +39,22 @@ fn populate_bootstrap_page_tables(page_tables: Spec, page_table_arch: i32): bool
 fn init_arch_contexts(): void {
     aarch64_context.init();
     riscv64_context.init();
+}
+
+fn init_object_spaces(): void {
+    kernel_object.init();
+    capability.init();
+    capability_space.init();
+    address_space.init();
+    process.init();
+    thread.init();
+    context.init();
+    scheduler.init();
+    user_program.init();
+    process_arg.init();
+    process_resources.init();
+    page_table_pages.init();
+    init_arch_contexts();
 }
 
 fn allocate_arch_context(page_table_arch: i32, thread_id: usize): usize {
@@ -88,16 +107,7 @@ pub fn prepare_memory(map: Layout, page_tables: Spec, page_table_arch: i32): voi
     selftest.run_page_table_contract_tests(map, page_tables, page_table_arch);
     selftest.run_kernel_object_tests();
     selftest.run_capability_tests();
-    kernel_object.init();
-    capability.init();
-    capability_space.init();
-    address_space.init();
-    process.init();
-    thread.init();
-    context.init();
-    scheduler.init();
-    user_program.init();
-    init_arch_contexts();
+    init_object_spaces();
     const plan = vm.bootstrap_plan(map, page_tables);
     const kernel_space = address_space.create_kernel_bootstrap(plan.page_table_root, plan.user_base, plan.user_end, plan.kernel_base, plan.kernel_heap_base, plan.kernel_heap_end);
     if kernel_space == address_space.invalid_id {
@@ -126,6 +136,30 @@ pub fn prepare_memory(map: Layout, page_tables: Spec, page_table_arch: i32): voi
     }
     selftest.run_thread_tests(kernel_process, kernel_thread, page_table_arch, page_tables);
     selftest.run_scheduler_tests(kernel_process, kernel_thread);
+    init_object_spaces();
+    const final_kernel_space = address_space.create_kernel_bootstrap(plan.page_table_root, plan.user_base, plan.user_end, plan.kernel_base, plan.kernel_heap_base, plan.kernel_heap_end);
+    if final_kernel_space == address_space.invalid_id {
+        panic_mod.panic();
+    }
+    const final_kernel_process = process.create_kernel_bootstrap(final_kernel_space, address_space.capability_id(final_kernel_space));
+    if final_kernel_process == process.invalid_id {
+        panic_mod.panic();
+    }
+    const final_kernel_process_info = process.get(final_kernel_process);
+    const final_kernel_thread = thread.create_kernel_bootstrap(final_kernel_process, final_kernel_process_info.capability_slot);
+    if final_kernel_thread == thread.invalid_id {
+        panic_mod.panic();
+    }
+    const final_kernel_arch_context = allocate_arch_context(page_table_arch, final_kernel_thread);
+    if final_kernel_arch_context == context.invalid_arch_context {
+        panic_mod.panic();
+    }
+    if !context.attach_kernel_context(final_kernel_thread, 0, 0, page_table_arch, final_kernel_arch_context) {
+        panic_mod.panic();
+    }
+    if !scheduler.set_current(final_kernel_thread) {
+        panic_mod.panic();
+    }
     if !heap.enable_virtual_mapping(vm.kernel_heap_virtual_base_for_spec(page_tables)) {
         panic_mod.panic();
     }

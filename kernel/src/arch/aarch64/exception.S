@@ -95,6 +95,7 @@ cory_arch_exception_restore_from_frame:
     b 3f
 2:
     msr sp_el0, x16
+    add sp, x18, #TF_SIZE
 3:
     ldp x0, x1, [x18, #TF_X0]
     ldp x2, x3, [x18, #TF_X2]

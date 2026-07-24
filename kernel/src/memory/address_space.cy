@@ -28,6 +28,7 @@ pub enum AddressSpaceStatus: i32 {
     invalid_capability,
     capability_object_mismatch,
     capability_right_missing,
+    active_space,
 }
 
 pub struct AddressSpace {
@@ -205,6 +206,37 @@ pub fn create_user_rooted(root_table: usize, spec: Spec): usize {
 // userspace creation should allocate a root page table before mapping pages.
 pub fn create_user_policy_fixture(spec: Spec): usize {
     return allocate_slot(AddressSpaceKind.user, 0, vm.user_virtual_base_for_spec(spec), vm.user_virtual_end_for_spec(spec), vm.kernel_virtual_base_for_spec(spec), vm.kernel_heap_virtual_base_for_spec(spec), vm.kernel_heap_virtual_end_for_spec(spec), false);
+}
+
+pub fn release(id: usize): bool {
+    const index = index_for_id(id);
+    if index >= max_address_spaces {
+        last_status = AddressSpaceStatus.invalid_id;
+        return false;
+    }
+    const entry = spaces.values[index];
+    if entry.active {
+        last_status = AddressSpaceStatus.active_space;
+        return false;
+    }
+    if !capability.release(entry.capability_id) {
+        last_status = AddressSpaceStatus.invalid_capability;
+        return false;
+    }
+    if !kernel_object.release(entry.object_id) {
+        last_status = AddressSpaceStatus.invalid_id;
+        return false;
+    }
+    spaces.values[index] = empty_address_space();
+    if spaces.remove(id) is none {
+        last_status = AddressSpaceStatus.invalid_id;
+        return false;
+    }
+    if current_id == id {
+        current_id = invalid_id;
+    }
+    last_status = AddressSpaceStatus.ok;
+    return true;
 }
 
 pub fn get(id: usize): AddressSpace {

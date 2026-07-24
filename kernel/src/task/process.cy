@@ -1,6 +1,7 @@
 import .collections.slot_map;
 import { StaticSlotMap } from .collections.slot_map;
 import .memory.address_space;
+import .console;
 import { AddressSpaceKind } from .memory.address_space;
 import .object.capability;
 import { CapabilityRights } from .object.capability;
@@ -401,6 +402,50 @@ pub fn get(id: usize): Process {
 
 pub fn count(): usize {
     return processes.count();
+}
+
+fn print_kind(kind: ProcessKind): void {
+    if kind == ProcessKind.kernel {
+        println("ps: kind kernel");
+        return;
+    }
+    if kind == ProcessKind.user {
+        println("ps: kind user");
+        return;
+    }
+    println("ps: kind empty");
+}
+
+fn print_state(entry: Process): void {
+    if entry.exited {
+        println("ps: state exited");
+        return;
+    }
+    if entry.active {
+        println("ps: state active");
+        return;
+    }
+    println("ps: state inactive");
+}
+
+pub fn print_table(): usize {
+    println("ps: process table");
+    var printed: usize = 0;
+    var index: usize = 0;
+    while index < max_processes {
+        if processes.live[index] {
+            const entry = processes.values[index];
+            println("ps: pid");
+            console.print_hex(entry.id);
+            console.putc(10);
+            print_kind(entry.kind);
+            print_state(entry);
+            printed = printed + 1;
+        }
+        index = index + 1;
+    }
+    last_status = ProcessStatus.ok;
+    return printed;
 }
 
 pub fn current(): usize {

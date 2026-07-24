@@ -258,6 +258,40 @@ pub fn has_context(thread_id: usize): bool {
     return index_for_thread(thread_id) < max_contexts;
 }
 
+fn release_arch_context(arch_id: i32, arch_context_id: usize): bool {
+    if arch_id == page_table.arch_aarch64 {
+        return aarch64_context.release(arch_context_id);
+    }
+    if arch_id == page_table.arch_riscv64 {
+        return riscv64_context.release(arch_context_id);
+    }
+    return false;
+}
+
+pub fn release_for_thread(thread_id: usize): bool {
+    const index = index_for_thread(thread_id);
+    if index >= max_contexts {
+        last_status = ContextStatus.missing_context;
+        return false;
+    }
+    const saved = contexts.values[index];
+    if !release_arch_context(saved.arch_id, saved.arch_context_id) {
+        last_status = ContextStatus.invalid_arch_context;
+        return false;
+    }
+    const thread_index = slot_map.index(thread.max_threads, thread_id);
+    if thread_index < max_contexts {
+        context_ids_by_thread_index[thread_index] = invalid_id;
+    }
+    contexts.values[index] = empty_context();
+    if contexts.remove(saved.id) is none {
+        last_status = ContextStatus.missing_context;
+        return false;
+    }
+    last_status = ContextStatus.ok;
+    return true;
+}
+
 pub fn get(thread_id: usize): ThreadContext {
     const index = index_for_thread(thread_id);
     if index >= max_contexts {

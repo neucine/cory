@@ -1,5 +1,7 @@
 import { LeafEntry, Spec, TableEntry } from .memory.page_table;
+import .memory.identity_map;
 import .memory.page_table as common_page_table;
+import .memory.page_table_pages;
 import .memory.phys;
 import .memory.vm;
 
@@ -132,7 +134,7 @@ fn leaf_table_page_for_virt(tables: Spec, virt: usize, create: bool): usize {
     return table_page;
 }
 
-fn ensure_child_table_phys(parent_table: usize, entry_index: usize, tables: Spec): usize {
+fn ensure_child_table_phys(root_table: usize, parent_table: usize, entry_index: usize, tables: Spec): usize {
     const existing = vm.read_table_entry(parent_table, entry_index, tables);
     if existing != 0 {
         return table_phys(TableEntry { raw: existing });
@@ -142,11 +144,17 @@ fn ensure_child_table_phys(parent_table: usize, entry_index: usize, tables: Spec
     if child == 0 {
         return 0;
     }
+    if !identity_map.map_page(child) {
+        return 0;
+    }
     if !vm.zero_table_page(child, tables) {
         return 0;
     }
     const entry = encode_table(child);
     if !vm.write_table_entry(parent_table, entry_index, tables, entry.raw) {
+        return 0;
+    }
+    if !page_table_pages.record_for_root(root_table, child) {
         return 0;
     }
     return child;
@@ -158,7 +166,7 @@ fn leaf_table_phys_for_virt(root_table: usize, tables: Spec, virt: usize, create
     while level < tables.level_count - 1 {
         const entry_index = vm.page_table_level_index(virt, tables, level);
         if create {
-            table_phys_addr = ensure_child_table_phys(table_phys_addr, entry_index, tables);
+            table_phys_addr = ensure_child_table_phys(root_table, table_phys_addr, entry_index, tables);
         } else {
             const raw = vm.read_table_entry(table_phys_addr, entry_index, tables);
             if raw == 0 {
@@ -282,10 +290,13 @@ pub fn lookup_user_phys(root_table: usize, tables: Spec, virt: usize): usize {
 pub fn populate_bootstrap_tables(tables: Spec): bool {
     var request_index: usize = 0;
     while request_index < vm.mapping_request_count() {
-        const request = vm.mapping_request(request_index);
+        const virt_start = vm.mapping_request_virt_start(request_index);
+        const phys_start = vm.mapping_request_phys_start(request_index);
+        const size = vm.mapping_request_size(request_index);
+        const rights = vm.mapping_request_rights(request_index);
         var offset: usize = 0;
-        while offset < request.size {
-            if !map_bootstrap_page(tables, request.virt_start + offset, request.phys_start + offset, request.rights) {
+        while offset < size {
+            if !map_bootstrap_page(tables, virt_start + offset, phys_start + offset, rights) {
                 return false;
             }
             offset = offset + tables.page_size;

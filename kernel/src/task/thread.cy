@@ -33,6 +33,7 @@ pub enum ThreadStatus: i32 {
     capability_space_failed,
     invalid_entry,
     invalid_stack,
+    active_thread,
 }
 
 pub struct Thread {
@@ -242,6 +243,54 @@ pub fn mark_blocked(id: usize): bool {
 
 pub fn mark_dead(id: usize): bool {
     return set_state(id, ThreadState.dead);
+}
+
+pub fn first_for_process(process_id: usize): usize {
+    var index: usize = 0;
+    while index < max_threads {
+        if threads.live[index] and threads.values[index].process_id == process_id {
+            last_status = ThreadStatus.ok;
+            return threads.values[index].id;
+        }
+        index = index + 1;
+    }
+    last_status = ThreadStatus.invalid_id;
+    return invalid_id;
+}
+
+pub fn release(id: usize): bool {
+    const index = index_for_id(id);
+    if index >= max_threads {
+        last_status = ThreadStatus.invalid_id;
+        return false;
+    }
+    const entry = threads.values[index];
+    if entry.state == ThreadState.running or entry.state == ThreadState.ready or entry.state == ThreadState.blocked {
+        last_status = ThreadStatus.active_thread;
+        return false;
+    }
+    if !capability_space.remove(entry.process_id, entry.capability_slot) {
+        last_status = ThreadStatus.capability_space_failed;
+        return false;
+    }
+    if !capability.release(entry.capability_id) {
+        last_status = ThreadStatus.invalid_id;
+        return false;
+    }
+    if !kernel_object.release(entry.object_id) {
+        last_status = ThreadStatus.invalid_id;
+        return false;
+    }
+    threads.values[index] = empty_thread();
+    if threads.remove(id) is none {
+        last_status = ThreadStatus.invalid_id;
+        return false;
+    }
+    if current_id == id {
+        current_id = invalid_id;
+    }
+    last_status = ThreadStatus.ok;
+    return true;
 }
 
 pub fn get(id: usize): Thread {

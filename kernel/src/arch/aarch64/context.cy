@@ -98,6 +98,20 @@ pub fn is_live(id: usize): bool {
     return live;
 }
 
+pub fn release(id: usize): bool {
+    if !is_live(id) {
+        return false;
+    }
+    const index = contexts.index(id);
+    contexts.values[index] = empty_context();
+    if contexts.remove(id) is none {
+        last_status = status_invalid_context;
+        return false;
+    }
+    last_status = status_ok;
+    return true;
+}
+
 pub fn owner_thread_id(id: usize): usize {
     if !is_live(id) {
         return 0;

@@ -3,13 +3,16 @@ import .arch.aarch64.page_table as aarch64_page_table;
 import .arch.riscv64.context as riscv64_context;
 import .arch.riscv64.page_table as riscv64_page_table;
 import .memory.address_space;
+import .memory.identity_map;
 import .memory.page_table;
+import .memory.page_table_pages;
 import { Spec } from .memory.page_table;
 import .memory.phys;
 import .memory.user_loader;
 import .memory.vm;
 import .task.context;
 import .task.process;
+import .task.process_resources;
 import .task.thread;
 import .user_image_abi;
 
@@ -138,10 +141,14 @@ fn map_kernel_page(arch: i32, root_table: usize, spec: Spec, virt: usize, phys_a
 fn mirror_kernel_mappings(arch: i32, root_table: usize, spec: Spec): bool {
     var request_index: usize = 0;
     while request_index < vm.mapping_request_count() {
-        const request = vm.mapping_request(request_index);
+        const virt_start = vm.mapping_request_virt_start(request_index);
+        const phys_start = vm.mapping_request_phys_start(request_index);
+        const size = vm.mapping_request_size(request_index);
+        const rights = vm.mapping_request_rights(request_index);
+        const kind = vm.mapping_request_kind(request_index);
         var offset: usize = 0;
-        while offset < request.size {
-            if !map_kernel_page(arch, root_table, spec, request.virt_start + offset, request.phys_start + offset, request.rights, request.kind) {
+        while offset < size {
+            if !map_kernel_page(arch, root_table, spec, virt_start + offset, phys_start + offset, rights, kind) {
                 return false;
             }
             offset = offset + spec.page_size;
@@ -297,8 +304,14 @@ fn prepare_image_thread_with_active_mapping(arch: i32, active_root: usize, spec:
     if user_root == 0 {
         return empty_plan(UserEntryStatus.user_root_failed);
     }
+    if !identity_map.map_page(user_root) {
+        return empty_plan(UserEntryStatus.user_root_failed);
+    }
     if !vm.zero_table_page(user_root, spec) {
         return empty_plan(UserEntryStatus.user_root_zero_failed);
+    }
+    if !page_table_pages.register_root(user_root) {
+        return empty_plan(UserEntryStatus.user_root_failed);
     }
     if !mirror_kernel_mappings(arch, user_root, spec) {
         return empty_plan(UserEntryStatus.kernel_map_failed);
@@ -319,6 +332,9 @@ fn prepare_image_thread_with_active_mapping(arch: i32, active_root: usize, spec:
     }
 
     const process_info = process.get(user_process);
+    if !process_resources.set_stack_phys(user_process, user_stack_phys) {
+        return empty_plan(UserEntryStatus.user_process_failed);
+    }
     if !user_loader.map_page(arch, user_space, process_info.address_space_capability_id, user_entry_page, entry_page, vm.rights_user_rx(), spec) {
         return empty_plan(UserEntryStatus.user_code_map_failed);
     }

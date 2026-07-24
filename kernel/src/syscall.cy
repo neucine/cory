@@ -10,6 +10,8 @@ pub enum SyscallOp: i32 {
     program_inspect,
     console_read,
     console_write,
+    process_list,
+    process_arg_read,
 }
 
 pub enum SyscallStatus: i32 {
@@ -60,6 +62,8 @@ pub const number_process_spawn_known: usize = 7;
 pub const number_program_inspect: usize = 8;
 pub const number_console_read: usize = 9;
 pub const number_console_write: usize = 10;
+pub const number_process_list: usize = 11;
+pub const number_process_arg_read: usize = 12;
 
 pub const asm_number_scheduler_yield_current: usize = 1;
 pub const asm_number_debug_write: usize = 3;
@@ -70,6 +74,8 @@ pub const asm_number_process_spawn_known: usize = 7;
 pub const asm_number_program_inspect: usize = 8;
 pub const asm_number_console_read: usize = 9;
 pub const asm_number_console_write: usize = 10;
+pub const asm_number_process_list: usize = 11;
+pub const asm_number_process_arg_read: usize = 12;
 
 export asm("CORY_SYSCALL_YIELD") const exported_asm_number_scheduler_yield_current: usize = 1;
 export asm("CORY_SYSCALL_DEBUG_WRITE") const exported_asm_number_debug_write: usize = 3;
@@ -80,6 +86,8 @@ export asm("CORY_SYSCALL_PROCESS_SPAWN") const exported_asm_number_process_spawn
 export asm("CORY_SYSCALL_PROGRAM_INSPECT") const exported_asm_number_program_inspect: usize = 8;
 export asm("CORY_SYSCALL_CONSOLE_READ") const exported_asm_number_console_read: usize = 9;
 export asm("CORY_SYSCALL_CONSOLE_WRITE") const exported_asm_number_console_write: usize = 10;
+export asm("CORY_SYSCALL_PROCESS_LIST") const exported_asm_number_process_list: usize = 11;
+export asm("CORY_SYSCALL_PROCESS_ARG_READ") const exported_asm_number_process_arg_read: usize = 12;
 
 var last_status: SyscallStatus = SyscallStatus.ok;
 
@@ -109,6 +117,12 @@ pub fn asm_numbers_match(): bool {
         return false;
     }
     if asm_number_console_write != number_console_write {
+        return false;
+    }
+    if asm_number_process_list != number_process_list {
+        return false;
+    }
+    if asm_number_process_arg_read != number_process_arg_read {
         return false;
     }
     return true;
@@ -144,6 +158,12 @@ pub fn from_number(number: usize): SyscallOp {
     }
     if number == number_console_write {
         return SyscallOp.console_write;
+    }
+    if number == number_process_list {
+        return SyscallOp.process_list;
+    }
+    if number == number_process_arg_read {
+        return SyscallOp.process_arg_read;
     }
     return SyscallOp.unknown;
 }

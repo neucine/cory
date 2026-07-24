@@ -417,10 +417,10 @@ pub fn run_vm_contract_tests(map: Layout, spec: Spec): void {
     if vm.kernel_heap_virtual_base_for_spec(spec) - vm.kernel_virtual_base_for_spec(spec) != vm.kernel_heap_virtual_offset {
         fail("selftest: vm heap virtual offset");
     }
-    if vm.user_virtual_base_for_spec(spec) != 0 {
+    if vm.user_virtual_base_for_spec(spec) != vm.user_virtual_base {
         fail("selftest: vm user base");
     }
-    if vm.user_virtual_end_for_spec(spec) != (1 << (spec.virtual_address_bits - 1)) {
+    if vm.user_virtual_end_for_spec(spec) != vm.user_virtual_base + vm.user_virtual_size {
         fail("selftest: vm user end");
     }
     if !vm.is_user_virtual_range(vm.user_virtual_base_for_spec(spec), spec.page_size, spec) {

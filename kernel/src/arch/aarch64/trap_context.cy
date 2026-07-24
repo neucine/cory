@@ -115,11 +115,11 @@ fn schedule_next_from_trap_frame_to_front(raw_frame: *TrapFrame): usize {
 pub fn write_resume_state_to_frame(thread_id: usize, raw_frame: *TrapFrame): bool {
     const thread_context = context.get(thread_id);
     if thread_context.id != context.invalid_id {
-        if write_user_resume_state(thread_context, raw_frame) {
+        if write_arch_frame(thread_context.arch_context_id, raw_frame) {
             last_status = status_ok;
             return true;
         }
-        if write_arch_frame(thread_context.arch_context_id, raw_frame) {
+        if write_user_resume_state(thread_context, raw_frame) {
             last_status = status_ok;
             return true;
         }
