@@ -1,9 +1,9 @@
-name = "cory-user-child"
+name = "cory-user-selftest"
 
 [build]
 default = "aarch64"
 kind = "exe"
-entry = "src/child.cy"
+entry = "src/selftest.cy"
 opt = "release"
 emit = ["elf", "bin"]
 

@@ -97,6 +97,38 @@ cory_user_process_spawn:
     mov x0, x1
     ret
 
+.global cory_user_process_spawn_path
+.type cory_user_process_spawn_path, %function
+cory_user_process_spawn_path:
+    mov x4, x3
+    mov x3, x2
+    mov x2, x1
+    adr x1, 20f
+    brk #20
+20:
+    mov x0, x1
+    ret
+
+.global cory_user_program_find
+.type cory_user_program_find, %function
+cory_user_program_find:
+    mov x2, x1
+    adr x1, 13f
+    brk #13
+13:
+    mov x0, x1
+    ret
+
+.global cory_user_program_find_path
+.type cory_user_program_find_path, %function
+cory_user_program_find_path:
+    mov x2, x1
+    adr x1, 19f
+    brk #19
+19:
+    mov x0, x1
+    ret
+
 .global cory_user_process_arg_read
 .type cory_user_process_arg_read, %function
 cory_user_process_arg_read:
@@ -104,6 +136,58 @@ cory_user_process_arg_read:
     adr x1, 12f
     brk #12
 12:
+    mov x0, x1
+    ret
+
+.global cory_user_fs_list
+.type cory_user_fs_list, %function
+cory_user_fs_list:
+    mov x3, x2
+    mov x2, x1
+    adr x1, 14f
+    brk #14
+14:
+    mov x0, x1
+    ret
+
+.global cory_user_fs_read
+.type cory_user_fs_read, %function
+cory_user_fs_read:
+    mov x3, x2
+    mov x2, x1
+    adr x1, 15f
+    brk #15
+15:
+    mov x0, x1
+    ret
+
+.global cory_user_fs_open
+.type cory_user_fs_open, %function
+cory_user_fs_open:
+    mov x2, x1
+    adr x1, 16f
+    brk #16
+16:
+    mov x0, x1
+    ret
+
+.global cory_user_fs_fd_read
+.type cory_user_fs_fd_read, %function
+cory_user_fs_fd_read:
+    mov x3, x2
+    mov x2, x1
+    adr x1, 17f
+    brk #17
+17:
+    mov x0, x1
+    ret
+
+.global cory_user_fs_close
+.type cory_user_fs_close, %function
+cory_user_fs_close:
+    adr x1, 18f
+    brk #18
+18:
     mov x0, x1
     ret
 

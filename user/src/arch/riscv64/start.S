@@ -110,6 +110,44 @@ cory_user_process_spawn:
     mv a0, a1
     ret
 
+.global cory_user_process_spawn_path
+.type cory_user_process_spawn_path, @function
+cory_user_process_spawn_path:
+    mv a5, a3
+    mv a4, a2
+    mv a3, a1
+    mv a2, a0
+    li a0, 20
+    la a1, 20f
+    .word 0x00000073
+20:
+    mv a0, a1
+    ret
+
+.global cory_user_program_find
+.type cory_user_program_find, @function
+cory_user_program_find:
+    mv a3, a1
+    mv a2, a0
+    li a0, 13
+    la a1, 13f
+    .word 0x00000073
+13:
+    mv a0, a1
+    ret
+
+.global cory_user_program_find_path
+.type cory_user_program_find_path, @function
+cory_user_program_find_path:
+    mv a3, a1
+    mv a2, a0
+    li a0, 19
+    la a1, 19f
+    .word 0x00000073
+19:
+    mv a0, a1
+    ret
+
 .global cory_user_process_arg_read
 .type cory_user_process_arg_read, @function
 cory_user_process_arg_read:
@@ -119,6 +157,68 @@ cory_user_process_arg_read:
     la a1, 12f
     .word 0x00000073
 12:
+    mv a0, a1
+    ret
+
+.global cory_user_fs_list
+.type cory_user_fs_list, @function
+cory_user_fs_list:
+    mv a4, a2
+    mv a3, a1
+    mv a2, a0
+    li a0, 14
+    la a1, 14f
+    .word 0x00000073
+14:
+    mv a0, a1
+    ret
+
+.global cory_user_fs_read
+.type cory_user_fs_read, @function
+cory_user_fs_read:
+    mv a4, a2
+    mv a3, a1
+    mv a2, a0
+    li a0, 15
+    la a1, 15f
+    .word 0x00000073
+15:
+    mv a0, a1
+    ret
+
+.global cory_user_fs_open
+.type cory_user_fs_open, @function
+cory_user_fs_open:
+    mv a3, a1
+    mv a2, a0
+    li a0, 16
+    la a1, 16f
+    .word 0x00000073
+16:
+    mv a0, a1
+    ret
+
+.global cory_user_fs_fd_read
+.type cory_user_fs_fd_read, @function
+cory_user_fs_fd_read:
+    mv a4, a2
+    mv a3, a1
+    mv a2, a0
+    li a0, 17
+    la a1, 17f
+    .word 0x00000073
+17:
+    mv a0, a1
+    ret
+
+.global cory_user_fs_close
+.type cory_user_fs_close, @function
+cory_user_fs_close:
+    mv a2, a0
+    li a0, 18
+    la a1, 18f
+    .word 0x00000073
+18:
     mv a0, a1
     ret
 

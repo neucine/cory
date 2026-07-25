@@ -1,0 +1,30 @@
+name = "cory-user-cat"
+
+[build]
+default = "aarch64"
+kind = "exe"
+entry = "src/cat.cy"
+opt = "release"
+emit = ["elf", "bin"]
+
+[build.aarch64]
+target = "aarch64-none-elf"
+cpu = "generic"
+
+[link.aarch64]
+script = "src/arch/aarch64/user.ld"
+entry_symbol = "cory_user_image_header"
+
+[asm.aarch64]
+sources = ["src/arch/aarch64/start.S"]
+
+[build.riscv64]
+target = "riscv64-none-elf"
+cpu = "generic-rv64"
+
+[link.riscv64]
+script = "src/arch/riscv64/user.ld"
+entry_symbol = "cory_user_image_header"
+
+[asm.riscv64]
+sources = ["src/arch/riscv64/start.S"]
