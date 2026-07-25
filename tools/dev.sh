@@ -6,11 +6,16 @@ QEMU_TIMEOUT="${QEMU_TIMEOUT:-15}"
 
 usage() {
   cat <<'EOF'
-usage: tools/check.sh <command>
+usage: tools/dev.sh <command>
 
 commands:
   aarch64        check, build, and boot the normal AArch64 QEMU image
   riscv64        check, build, and boot the normal RISC-V64 QEMU image
+  run-aarch64    run the existing normal AArch64 QEMU image interactively
+  run-arm64      alias for run-aarch64
+  run-riscv64    run the existing normal RISC-V64 QEMU image interactively
+  build-run-aarch64 build and run the normal AArch64 QEMU image interactively
+  build-run-riscv64 build and run the normal RISC-V64 QEMU image interactively
   trap-aarch64   check, build, and boot the opt-in AArch64 trap probe
   trap-riscv64   check, build, and boot the opt-in RISC-V64 trap probe
   restore-aarch64 check, build, and boot the opt-in AArch64 restore probe
@@ -35,6 +40,9 @@ commands:
   timersched     run timersched-aarch64 and timersched-riscv64
   normalsched    run normalsched-aarch64
   all            run normal, traps, restore, userret, sched, timerirq, timerdiag, timersched, and normalsched
+
+interactive QEMU:
+  use Ctrl-c to quit when running interactively
 EOF
 }
 
@@ -74,13 +82,23 @@ run_qemu_expect() {
   rm -f "$output" "$expected_output"
 }
 
-build_user_images() {
+build_user_images_for_arch() {
+  arch="$1"
   for program in init selftest shell echo ps ls cat; do
-    "$CYNA" build "user/${program}.toml" --build aarch64
-    "$CYNA" build "user/${program}.toml" --build riscv64
+    "$CYNA" build "user/${program}.toml" --build "$arch"
   done
-  python3 tools/mkinitramfs.py user/build/initramfs-aarch64.bin
-  python3 tools/mkinitramfs.py user/build/initramfs-riscv64.bin
+  python3 tools/mkinitramfs.py "user/build/initramfs-${arch}.bin"
+}
+
+build_user_images() {
+  build_user_images_for_arch aarch64
+  build_user_images_for_arch riscv64
+}
+
+build_kernel_for_arch() {
+  arch="$1"
+  "$CYNA" check kernel/cyna.toml --build "$arch"
+  "$CYNA" build kernel/cyna.toml --build "$arch"
 }
 
 generate_probe_manifest() {
@@ -148,7 +166,7 @@ run_probe() {
   expected_2="$7"
   shift 7
 
-  build_user_images
+  build_user_images_for_arch "$arch"
   manifest_dir="kernel"
   temp_entry="src/.cory-${label}-$$.cy"
   cp "${manifest_dir}/${test_entry}" "${manifest_dir}/${temp_entry}"
@@ -163,14 +181,14 @@ run_probe() {
 }
 
 run_aarch64() {
-  build_user_images
-  "$CYNA" check kernel/cyna.toml --build aarch64
-  "$CYNA" build kernel/cyna.toml --build aarch64
+  build_user_images_for_arch aarch64
+  build_kernel_for_arch aarch64
   run_qemu_expect aarch64 \
     "userspace: normal user spawned selftest aarch64" \
     "userspace: cy selftest ran ok" \
     "userspace: selftest wait ok from init" \
     "userspace: normal user spawned shell aarch64" \
+    "|      Cory      |" \
     "cory> help" \
     "shell: commands: help, cat, echo, ls, ps, selftest, exit" \
     "cory> ps" \
@@ -214,14 +232,14 @@ time.sleep(3)
 }
 
 run_riscv64() {
-  build_user_images
-  "$CYNA" check kernel/cyna.toml --build riscv64
-  "$CYNA" build kernel/cyna.toml --build riscv64
+  build_user_images_for_arch riscv64
+  build_kernel_for_arch riscv64
   run_qemu_expect riscv64 \
     "userspace: normal user spawned selftest riscv64" \
     "userspace: cy selftest ran ok" \
     "userspace: selftest wait ok from init" \
     "userspace: normal user spawned shell riscv64" \
+    "|      Cory      |" \
     "cory> help" \
     "shell: commands: help, cat, echo, ls, ps, selftest, exit" \
     "cory> ps" \
@@ -264,60 +282,82 @@ time.sleep(3)
 '"'"' | timeout "$1" qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-riscv64.elf' sh "$QEMU_TIMEOUT"
 }
 
+qemu_aarch64_interactive() {
+  printf '%s\n' "starting AArch64 QEMU on stdio serial; use Ctrl-c to quit"
+  qemu-system-aarch64 -machine virt -cpu cortex-a53 -display none -serial stdio -monitor none -kernel kernel/build/cory-aarch64.elf
+}
+
+qemu_riscv64_interactive() {
+  printf '%s\n' "starting RISC-V64 QEMU on stdio serial; use Ctrl-c to quit"
+  qemu-system-riscv64 -machine virt -display none -serial stdio -monitor none -bios none -kernel kernel/build/cory-riscv64.elf
+}
+
+build_run_interactive_aarch64() {
+  build_user_images_for_arch aarch64
+  build_kernel_for_arch aarch64
+  qemu_aarch64_interactive
+}
+
+build_run_interactive_riscv64() {
+  build_user_images_for_arch riscv64
+  build_kernel_for_arch riscv64
+  qemu_riscv64_interactive
+}
+
 run_trap_aarch64() {
-  run_probe trap-aarch64 aarch64 cory-traptest src/platform/qemu_aarch64_virt/trap.test.cy "" "traptest: trigger aarch64" "exception: unhandled aarch64" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-traptest.elf
+  run_probe trap-aarch64 aarch64 cory-traptest src/tests/platform/qemu_aarch64_virt/trap.test.cy "" "traptest: trigger aarch64" "exception: unhandled aarch64" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-traptest.elf
 }
 
 run_trap_riscv64() {
-  run_probe trap-riscv64 riscv64 cory-traptest-riscv64 src/platform/qemu_riscv64_virt/trap.test.cy "" "traptest: trigger riscv64" "exception: unhandled riscv64" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-traptest-riscv64.elf
+  run_probe trap-riscv64 riscv64 cory-traptest-riscv64 src/tests/platform/qemu_riscv64_virt/trap.test.cy "" "traptest: trigger riscv64" "exception: unhandled riscv64" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-traptest-riscv64.elf
 }
 
 run_restore_aarch64() {
-  run_probe restore-aarch64 aarch64 cory-restoretest src/platform/qemu_aarch64_virt/restore.test.cy "" "restoretest: resumed aarch64" "panic" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-restoretest.elf
+  run_probe restore-aarch64 aarch64 cory-restoretest src/tests/platform/qemu_aarch64_virt/restore.test.cy "" "restoretest: resumed aarch64" "panic" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-restoretest.elf
 }
 
 run_restore_riscv64() {
-  run_probe restore-riscv64 riscv64 cory-restoretest-riscv64 src/platform/qemu_riscv64_virt/restore.test.cy "" "restoretest: resumed riscv64" "panic" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-restoretest-riscv64.elf
+  run_probe restore-riscv64 riscv64 cory-restoretest-riscv64 src/tests/platform/qemu_riscv64_virt/restore.test.cy "" "restoretest: resumed riscv64" "panic" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-restoretest-riscv64.elf
 }
 
 run_userret_aarch64() {
-  run_probe userret-aarch64 aarch64 cory-userrettest src/platform/qemu_aarch64_virt/userret.test.cy src/platform/qemu_aarch64_virt/usermode_probe.S "userrettest: return to user aarch64" "userrettest: user trap aarch64" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-userrettest.elf
+  run_probe userret-aarch64 aarch64 cory-userrettest src/tests/platform/qemu_aarch64_virt/userret.test.cy src/platform/qemu_aarch64_virt/usermode_probe.S "userrettest: return to user aarch64" "userrettest: user trap aarch64" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-userrettest.elf
 }
 
 run_userret_riscv64() {
-  run_probe userret-riscv64 riscv64 cory-userrettest-riscv64 src/platform/qemu_riscv64_virt/userret.test.cy src/platform/qemu_riscv64_virt/usermode_probe.S "userrettest: return to user riscv64" "userrettest: user trap riscv64" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-userrettest-riscv64.elf
+  run_probe userret-riscv64 riscv64 cory-userrettest-riscv64 src/tests/platform/qemu_riscv64_virt/userret.test.cy src/platform/qemu_riscv64_virt/usermode_probe.S "userrettest: return to user riscv64" "userrettest: user trap riscv64" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-userrettest-riscv64.elf
 }
 
 run_sched_aarch64() {
-  run_probe sched-aarch64 aarch64 cory-schedtest src/platform/qemu_aarch64_virt/sched.test.cy src/platform/qemu_aarch64_virt/schedtest.S "schedtest: selected thread b" "schedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-schedtest.elf
+  run_probe sched-aarch64 aarch64 cory-schedtest src/tests/platform/qemu_aarch64_virt/sched.test.cy src/platform/qemu_aarch64_virt/schedtest.S "schedtest: selected thread b" "schedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-schedtest.elf
 }
 
 run_sched_riscv64() {
-  run_probe sched-riscv64 riscv64 cory-schedtest-riscv64 src/platform/qemu_riscv64_virt/sched.test.cy src/platform/qemu_riscv64_virt/schedtest.S "schedtest: selected thread b" "schedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-schedtest-riscv64.elf
+  run_probe sched-riscv64 riscv64 cory-schedtest-riscv64 src/tests/platform/qemu_riscv64_virt/sched.test.cy src/platform/qemu_riscv64_virt/schedtest.S "schedtest: selected thread b" "schedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-schedtest-riscv64.elf
 }
 
 run_timerirq_aarch64() {
-  run_probe timerirq-aarch64 aarch64 cory-timerirqtest src/platform/qemu_aarch64_virt/timerirq.test.cy "" "timerirqtest: waiting for virtual timer irq" "timerirqtest: received virtual timer irq" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-timerirqtest.elf
+  run_probe timerirq-aarch64 aarch64 cory-timerirqtest src/tests/platform/qemu_aarch64_virt/timerirq.test.cy "" "timerirqtest: waiting for virtual timer irq" "timerirqtest: received virtual timer irq" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-timerirqtest.elf
 }
 
 run_timerirq_riscv64() {
-  run_probe timerirq-riscv64 riscv64 cory-timerirqtest-riscv64 src/platform/qemu_riscv64_virt/timerirq.test.cy "" "timerirqtest: waiting for supervisor timer irq" "timerirqtest: received supervisor timer irq" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-timerirqtest-riscv64.elf
+  run_probe timerirq-riscv64 riscv64 cory-timerirqtest-riscv64 src/tests/platform/qemu_riscv64_virt/timerirq.test.cy "" "timerirqtest: waiting for supervisor timer irq" "timerirqtest: received supervisor timer irq" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-timerirqtest-riscv64.elf
 }
 
 run_timerdiag_aarch64() {
-  run_probe timerdiag-aarch64 aarch64 cory-timerdiagtest src/platform/qemu_aarch64_virt/timerdiag.test.cy "" "timerdiagtest: waiting for diagnostic tick" "timerdiagtest: diagnostic tick" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-timerdiagtest.elf
+  run_probe timerdiag-aarch64 aarch64 cory-timerdiagtest src/tests/platform/qemu_aarch64_virt/timerdiag.test.cy "" "timerdiagtest: waiting for diagnostic tick" "timerdiagtest: diagnostic tick" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-timerdiagtest.elf
 }
 
 run_timersched_aarch64() {
-  run_probe timersched-aarch64 aarch64 cory-timerschedtest src/platform/qemu_aarch64_virt/timersched.test.cy src/platform/qemu_aarch64_virt/schedtest.S "timerschedtest: selected thread b" "timerschedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-timerschedtest.elf
+  run_probe timersched-aarch64 aarch64 cory-timerschedtest src/tests/platform/qemu_aarch64_virt/timersched.test.cy src/platform/qemu_aarch64_virt/schedtest.S "timerschedtest: selected thread b" "timerschedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-timerschedtest.elf
 }
 
 run_timersched_riscv64() {
-  run_probe timersched-riscv64 riscv64 cory-timerschedtest-riscv64 src/platform/qemu_riscv64_virt/timersched.test.cy src/platform/qemu_riscv64_virt/schedtest.S "timerschedtest: selected thread b" "timerschedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-timerschedtest-riscv64.elf
+  run_probe timersched-riscv64 riscv64 cory-timerschedtest-riscv64 src/tests/platform/qemu_riscv64_virt/timersched.test.cy src/platform/qemu_riscv64_virt/schedtest.S "timerschedtest: selected thread b" "timerschedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-timerschedtest-riscv64.elf
 }
 
 run_normalsched_aarch64() {
-  run_probe normalsched-aarch64 aarch64 cory-normalschedtest src/platform/qemu_aarch64_virt/normalsched.test.cy src/platform/qemu_aarch64_virt/schedtest.S "tick: scheduler tick" "normalschedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-normalschedtest.elf
+  run_probe normalsched-aarch64 aarch64 cory-normalschedtest src/tests/platform/qemu_aarch64_virt/normalsched.test.cy src/platform/qemu_aarch64_virt/schedtest.S "tick: scheduler tick" "normalschedtest: thread b resumed" timeout "$QEMU_TIMEOUT" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-normalschedtest.elf
 }
 
 run_normal() {
@@ -370,6 +410,18 @@ case "$command" in
     ;;
   riscv64)
     run_riscv64
+    ;;
+  run-aarch64|run-arm64)
+    qemu_aarch64_interactive
+    ;;
+  run-riscv64)
+    qemu_riscv64_interactive
+    ;;
+  build-run-aarch64|build-run-arm64)
+    build_run_interactive_aarch64
+    ;;
+  build-run-riscv64)
+    build_run_interactive_riscv64
     ;;
   trap-aarch64)
     run_trap_aarch64

@@ -16,6 +16,10 @@ cstruct NewlineMessage {
     bytes: [2]u8;
 }
 
+cstruct BannerMessage {
+    bytes: [58]u8;
+}
+
 cstruct HelpMessage {
     bytes: [58]u8;
 }
@@ -45,6 +49,24 @@ fn write_newline(): void {
         bytes: [10, 0],
     };
     const written = syscall.console_write(message.ptr() as! *c_uchar, 1);
+}
+
+fn write_banner(): void {
+    var message = new BannerMessage {
+        bytes: [
+            '+', '-', '-', '-', '-', '-', '-', '-', '-',
+            '-', '-', '-', '-', '-', '-', '-', '-', '+',
+            '\n',
+            '|', ' ', ' ', ' ', ' ', ' ', ' ', 'C', 'o',
+            'r', 'y', ' ', ' ', ' ', ' ', ' ', ' ', '|',
+            '\n',
+            '+', '-', '-', '-', '-', '-', '-', '-', '-',
+            '-', '-', '-', '-', '-', '-', '-', '-', '+',
+            '\n',
+            0,
+        ],
+    };
+    const written = syscall.console_write(message.ptr() as! *c_uchar, 57);
 }
 
 fn write_help(): void {
@@ -225,6 +247,7 @@ export c("cory_user_main") fn cory_user_main(): void {
     var name_start: usize = 0;
     var name_end: usize = 0;
     var name_len: usize = 0;
+    write_banner();
     while true {
         write_prompt(buffer.ptr() as! *Buffer);
         read_len = syscall.console_read(buffer.ptr() as! *c_uchar, 64) as usize;
