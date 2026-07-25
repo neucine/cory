@@ -1,5 +1,5 @@
 import .collections.slot_map;
-import .fs_archive;
+import .fs.archive;
 import .memory.user_memory;
 import { Spec } from .memory.page_table;
 import .task.process;
@@ -17,7 +17,7 @@ const fd_base: usize = 3;
 
 var last_status: FsStatus = FsStatus.ok;
 var fd_live: [32]bool = [false] ** 32;
-var fd_record: [32]usize = [fs_archive.record_none] ** 32;
+var fd_record: [32]usize = [archive.record_none] ** 32;
 var fd_offset: [32]usize = [0] ** 32;
 
 pub fn status(): FsStatus {
@@ -28,7 +28,7 @@ pub fn init(): void {
     var index: usize = 0;
     while index < 32 {
         fd_live[index] = false;
-        fd_record[index] = fs_archive.record_none;
+        fd_record[index] = archive.record_none;
         fd_offset[index] = 0;
         index = index + 1;
     }
@@ -83,8 +83,8 @@ fn validate_user_output(arch: i32, process_id: usize, out: usize, max_len: usize
 }
 
 fn record_for_user_path(path: usize, path_len: usize): usize {
-    const record_id = fs_archive.find_user_path(path, path_len);
-    if record_id == fs_archive.record_none {
+    const record_id = archive.find_user_path(path, path_len);
+    if record_id == archive.record_none {
         last_status = FsStatus.not_found;
     }
     return record_id;
@@ -99,16 +99,16 @@ pub fn list_to_user(arch: i32, process_id: usize, path: usize, path_len: usize, 
     }
 
     const record_id = record_for_user_path(path, path_len);
-    if record_id == fs_archive.record_none {
+    if record_id == archive.record_none {
         return 0;
     }
-    if fs_archive.kind(record_id) != fs_archive.kind_dir {
+    if archive.kind(record_id) != archive.kind_dir {
         last_status = FsStatus.not_found;
         return 0;
     }
 
     last_status = FsStatus.ok;
-    return fs_archive.read_to_user(record_id, out, max_len, 0);
+    return archive.read_to_user(record_id, out, max_len, 0);
 }
 
 pub fn read_to_user(arch: i32, process_id: usize, path: usize, path_len: usize, out: usize, max_len: usize, spec: Spec): usize {
@@ -120,12 +120,12 @@ pub fn read_to_user(arch: i32, process_id: usize, path: usize, path_len: usize, 
     }
 
     const record_id = record_for_user_path(path, path_len);
-    if record_id == fs_archive.record_none {
+    if record_id == archive.record_none {
         return 0;
     }
 
     last_status = FsStatus.ok;
-    return fs_archive.read_to_user(record_id, out, max_len, 0);
+    return archive.read_to_user(record_id, out, max_len, 0);
 }
 
 pub fn open(arch: i32, process_id: usize, path: usize, path_len: usize, spec: Spec): usize {
@@ -134,7 +134,7 @@ pub fn open(arch: i32, process_id: usize, path: usize, path_len: usize, spec: Sp
     }
 
     const record_id = record_for_user_path(path, path_len);
-    if record_id == fs_archive.record_none {
+    if record_id == archive.record_none {
         return 0;
     }
 
@@ -165,18 +165,18 @@ pub fn read_fd_to_user(arch: i32, process_id: usize, fd: usize, out: usize, max_
         return 0;
     }
 
-    const copied = fs_archive.read_to_user(fd_record[index], out, max_len, fd_offset[index]);
+    const copied = archive.read_to_user(fd_record[index], out, max_len, fd_offset[index]);
     fd_offset[index] = fd_offset[index] + copied;
     last_status = FsStatus.ok;
     return copied;
 }
 
 pub fn bin_program_data_addr(program_id: usize): usize {
-    return fs_archive.bin_program_data_addr(program_id);
+    return archive.bin_program_data_addr(program_id);
 }
 
 pub fn bin_program_data_len(program_id: usize): usize {
-    return fs_archive.bin_program_data_len(program_id);
+    return archive.bin_program_data_len(program_id);
 }
 
 pub fn close(process_id: usize, fd: usize): bool {
@@ -187,7 +187,7 @@ pub fn close(process_id: usize, fd: usize): bool {
         return false;
     }
     fd_live[index] = false;
-    fd_record[index] = fs_archive.record_none;
+    fd_record[index] = archive.record_none;
     fd_offset[index] = 0;
     last_status = FsStatus.ok;
     return true;
@@ -199,7 +199,7 @@ pub fn clear_for_process(process_id: usize): void {
         const index = table_index(process_id, slot);
         if index < 32 {
             fd_live[index] = false;
-            fd_record[index] = fs_archive.record_none;
+            fd_record[index] = archive.record_none;
             fd_offset[index] = 0;
         }
         slot = slot + 1;
