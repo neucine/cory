@@ -34,11 +34,20 @@ task/
     owns process/thread identity, execution-container metadata, and
     process-local capability spaces, and metadata-only scheduling decisions
 
+fs/
+    owns the read-only initramfs-backed filesystem facade and archive reader
+
+syscall/
+    owns shared syscall decode, result vocabulary, and error mapping
+
 selftest.cy
     thin facade for boot-time contract checks
 
-memory/selftest.cy, object/selftest.cy, task/selftest.cy, arch/selftest.cy
-    own subsystem checks that keep both QEMU targets honest
+tests/*_tests.cy
+    own imported boot-time subsystem checks that keep both QEMU targets honest
+
+tests/platform/<board>/*.test.cy
+    own opt-in QEMU probe image entrypoints built by path through tools/dev.sh
 ```
 
 ## Naming Rules
@@ -106,14 +115,23 @@ memory/selftest.cy, object/selftest.cy, task/selftest.cy, arch/selftest.cy
   init can switch the active hardware translation root before returning to user
   mode. Probe callers keep the process inactive; normal boot asks for an active
   init process.
-- `task/user_program.cy` is the first tiny user-program registry. Platform boot
-  prepares user images while physical memory is still directly reachable,
-  registers inactive ready processes by numeric program id, and syscall `7`
-  looks up that registry before activating and queueing a program. Syscall `8`
-  exposes the same registry lookup to userspace so init can discover a program's
-  prepared process/thread ids before spawning it.
-- `kernel/selftest.cy` should stay a small facade. Put new checks beside the
-  subsystem they exercise.
+- `task/user_program.cy` owns validated loaded user images. Platform boot reads
+  `/bin/*` from initramfs, validates the small Cory image header, prepares each
+  image as an inactive ready process, and records it in the catalog.
+- `task/user_program_catalog.cy` is the stable program-name/id map used by
+  spawn and inspect syscalls. The catalog names the current `/bin` programs
+  instead of scattering numeric ids through syscall and platform code.
+- `fs.cy` is the kernel filesystem facade. `fs/archive.cy` owns the tiny
+  read-only initramfs archive parser so archive layout details do not leak into
+  fd-table or syscall-facing code.
+- `syscall.cy` owns syscall numbers, decode, request/result types, and shared
+  status vocabulary. `syscall/error_map.cy` translates subsystem statuses into
+  syscall errors at the syscall boundary.
+- `kernel/selftest.cy` should stay a small facade over `tests/*_tests.cy`.
+  Imported test modules cannot use `test` as a module-path segment because
+  `test` is a Cyna keyword, so shared suites use names such as
+  `memory_tests.cy`. Probe entry files that are built directly by path can keep
+  the `*.test.cy` suffix.
 - Architecture descriptor modules that are imported by common cross-arch tests
   must not export assembler symbols; keep asm ABI exports in target-specific
   modules.
@@ -259,12 +277,8 @@ proofs, plus normal scheduler-tick resume paths on both QEMU targets:
   shared request, number-to-operation vocabulary, and decode status that a
   broader syscall surface can grow from. Syscall requests now carry four
   argument slots and an explicit origin, and syscall results have a small
-  value/error shape, although current scheduler operations still restore
-  directly instead of returning. The assembly-backed normal init and child
-  images use tiny target-local syscall and user-buffer macros so the raw
-  `brk`/`ecall` encodings stay named at each call site. Syscall numbers are
-  exported from `syscall.cy` into the generated assembly include, so assembly
-  callers do not carry a separate syscall-number table.
+  value/error shape. Cyna user programs call syscalls through the user-side OS
+  wrapper instead of open-coding target trap symbols in each command.
 - Rooted user address-space metadata, inactive user process metadata, and ready
   user-shaped thread metadata are now represented and selftested. The loader can
   map user pages into rooted user address spaces on both page-table formats,
@@ -284,31 +298,25 @@ proofs, plus normal scheduler-tick resume paths on both QEMU targets:
   kernel-only bootstrap mappings, and both user-return probes switch the active
   root to that user root before restoring into user mode. AArch64 switches
   `TTBR0_EL1`; RISC-V64 switches `satp`.
-- Normal boot now prepares one minimal init image with `task/user_entry.cy`.
-  The current image payload is still assembly-backed and one page, but it is
-  discovered through a tiny validated `UserImageHeader` before becoming a
-  `UserImage` load plan. The image contract rejects entries inside the header,
-  entries past the code span, and spans that would cross the single mapped image
-  page. The loader maps the image into both the active bootstrap root and the
-  rooted user address space, activates the resulting init process, switches to
-  that user root when the scheduler selects the thread, and handles yield,
-  debug-write, and exit through the shared syscall request vocabulary. The user
-  yield syscall writes a small result ABI into the saved frame and returns to
-  the same user thread. The debug-write syscall validates a bounded user range,
-  reads bytes from the active user mapping, writes them to the console, and
-  returns the byte count. RISC-V64 opens `sstatus.SUM` only around that
-  validated user read. The process-exit syscall stores the supplied exit code,
-  marks the current user process inactive/exited, marks its thread dead, selects
-  the next runnable thread, switches back to that thread's address-space root,
-  and restores it. Kernel process metadata can wait on an exited process to
-  observe its code, then reap it through the existing release path. Syscall `5`
-  dispatches this wait/reap operation for user-origin requests, returning
-  specific invalid-process or not-exited errors. A small boot-time user-program
-  registry records prepared inactive user images; syscall `8` inspects program
-  id `1`, and syscall `7` activates and front-queues it, allowing init to spawn
-  a child, wait for its exit code, and then exit itself. The normal-user handoff
-  stops scheduler timer delivery first so this proof is driven by explicit
-  userspace traps instead of a racing tick.
+- Normal boot now loads user programs from an embedded initramfs. User binaries
+  are Cyna programs built under `user/`, wrapped in the small Cory image header,
+  packed into `user/build/initramfs-<arch>.bin`, and exposed by the kernel as
+  `/bin/*`. Platform boot reads those files through `fs.cy`, validates each
+  `UserImageHeader`, prepares inactive ready processes with `task/user_entry.cy`,
+  and records them in `task/user_program_catalog.cy`. Init starts a shell, and
+  the shell can spawn `/bin/cat`, `/bin/echo`, `/bin/ls`, `/bin/ps`, and
+  `/bin/selftest`.
+- User syscalls now cover the current shell workload: debug-write, yield,
+  process/thread identity, program inspect/spawn, wait/reap, process exit,
+  argument passing, directory listing, and file reads. Debug-write validates a
+  bounded user range, reads bytes from the active user mapping, writes them to
+  the console, and returns the byte count. RISC-V64 opens `sstatus.SUM` only
+  around validated user reads. Process exit stores the exit code, marks process
+  and thread state, selects the next runnable thread, switches address-space
+  root, and restores that thread.
+- The current filesystem is a tiny read-only initramfs-backed tree with `/bin`,
+  `/etc`, and `/etc/motd`. It is intentionally not a general filesystem yet;
+  it exists to make user-program loading and simple shell commands concrete.
 - `memory/user_memory.cy` owns the first user-buffer policy: process/address
   space lookup, overflow checks, user-range checks, a fixed debug-copy limit,
   and bounded byte streaming from user memory. It deliberately does not yet walk
@@ -316,20 +324,19 @@ proofs, plus normal scheduler-tick resume paths on both QEMU targets:
   kernel-mapped page-table window can make mapping validation stronger.
 
 The important boundary: normal boot on both QEMU targets can now move from
-timer-driven kernel scheduling into one active-root userspace workload and back
-through decoded user traps that return for yield, debug-write, and current
-process/thread identity. The init image can also inspect and spawn program id
-`1` from the boot-time registry, reap its exit status, and then exit through a
-trap that schedules away. There is still no long-running scheduler workload,
-general user loader, complete syscall ABI, or shell/runtime process model.
+timer-driven kernel scheduling into a small interactive userspace, load command
+programs from `/bin`, and return through decoded user traps for file, process,
+and console operations. There is still no long-running scheduler workload,
+standard executable format, complete syscall ABI, IPC, or writable filesystem.
 
 ## Subsystem Direction
 
 Near-term work should make existing layers easier to reason about before moving
 up to scheduler/userspace:
 
-- extend the yield/debug-write syscall result path into a broader syscall ABI
-- grow from the one-page init image toward a real image format and init handoff
+- make the syscall and user OS wrapper easier to extend as more commands arrive
+- decide how far the current Cory image header should go before a standard
+  executable format is worth supporting
 - keep RISC-V timer delivery in the current Cory-owned M-mode shim unless a
   later SBI-style platform entry justifies a separate target
 - keep QEMU AArch64 and RISC-V64 boot checks green after every slice

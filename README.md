@@ -47,39 +47,34 @@ bring-up paths:
 - **AArch64** on `qemu-system-aarch64 -machine virt`
 - **RISC-V64** on `qemu-system-riscv64 -machine virt`
 
-Current boot images initialize console output, trap vectors, early memory,
-bootstrap page tables, physical pages, heap metadata, address spaces, kernel
-objects, capabilities, process metadata, thread metadata, scheduler metadata,
-architecture context storage, rooted user address-space metadata, inactive user
-process metadata, loader-owned user page mappings, ready user-shaped thread
-metadata, prepared user-mode context metadata, and probe-only user-mode
-exception returns through an active user address-space root switch.
+Cory now reaches a small interactive userspace on both QEMU targets. The normal
+boot path initializes kernel memory, page tables, objects, capabilities,
+process/thread metadata, scheduler state, traps, timers, and user address-space
+handoff, then starts an init program that launches a shell.
 
-The latest normal boot path on both QEMU targets can enable scheduler tick mode,
-resume normal kernel workers, switch through voluntary yield/block traps, then
-load one minimal init image into an active user address-space root. That image
-is described by a small validated header whose entry and code span must fit
-inside the mapped image page. It traps back into the kernel for yield,
-debug-write, current process/thread identity, program inspection/spawn,
-wait/reap, and exit operations, proving the current scheduler/syscall
-vocabulary can cross the user/kernel boundary without a probe-only entry image.
-The yield syscall now returns an OK result to userspace before init issues a
-bounded debug-write syscall that validates and reads a user buffer, prints it,
-returns the byte count, reads its current process/thread ids, inspects and
-spawns a second prepared program, reaps its status, and then exits with status
-0 through a process-lifecycle syscall that schedules back to the remaining
-kernel worker. Kernel process metadata can now observe and reap exited
-processes by status code, and syscall `5` exposes that wait/reap operation to
-userspace by process id. Syscall `6` returns the current process id and thread
-id. Syscall `7` spawns a prepared program from the boot-time user program
-registry; program id `1` is the current child image. Syscall `8` inspects a
-registry entry before spawning it.
+User programs are written in Cyna under `user/`, built into the small Cory user
+image format, packed into an initramfs image, and mounted by the kernel at
+boot. The current filesystem exposes `/bin` and `/etc`, with `/bin` containing
+the first command programs:
+
+```text
+cat
+echo
+ls
+ps
+selftest
+shell
+```
+
+The shell is intentionally tiny, but it proves a real path through user/kernel
+boundaries: debug output, current process/thread lookup, process spawn,
+wait/reap, filesystem reads, directory listing, argument passing, and process
+exit all cross through decoded syscalls on both architectures.
 
 Still intentionally missing:
 
 - long-running scheduler workloads
-- user-returning syscalls beyond yield/debug-write
-- user ELF/process loading beyond the current one-page init image
+- a standard executable format such as ELF
 - IPC
 - shared buffers
 - the camera pipeline demo
@@ -93,12 +88,13 @@ Cory is organized around a few firm boundaries:
 
 ```text
 kernel/               Kernel project, manifests, source, and build outputs
-kernel/src/    Platform-neutral kernel source
+kernel/src/           Platform-neutral kernel source
 kernel/src/arch/      CPU architecture entry, traps, contexts, and page tables
 kernel/src/memory/    Physical memory, heap, VM, page tables, address spaces
 kernel/src/object/    Kernel object identity and capability authority
 kernel/src/task/      Processes, threads, contexts, scheduling metadata
 kernel/src/platform/  Board startup, memory maps, console, timers, interrupts
+kernel/src/tests/     Kernel selftests and opt-in QEMU probe entrypoints
 user/                 User program project sources, manifests, and startup stubs
 ```
 
@@ -122,6 +118,17 @@ while the kernel is still small.
 
 You need a Cyna compiler and QEMU for the target you want to boot.
 
+The check runner builds user programs, packs the initramfs, builds the kernel,
+boots QEMU, sends a short shell script, and verifies the expected serial output:
+
+```sh
+tools/dev.sh normal
+tools/dev.sh all
+```
+
+For manual builds, build the user programs/initramfs first or use the check
+runner once to generate them:
+
 ```sh
 cyna version
 cyna check kernel/cyna.toml --build aarch64
@@ -141,24 +148,33 @@ kernel/build/cory-riscv64.elf
 kernel/build/cory-riscv64.bin
 ```
 
-Boot the normal images:
+Boot the normal images manually:
 
 ```sh
-qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-aarch64.elf
-qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-riscv64.elf
+qemu-system-aarch64 -machine virt -cpu cortex-a53 -display none -serial stdio -monitor none -kernel kernel/build/cory-aarch64.elf
+qemu-system-riscv64 -machine virt -display none -serial stdio -monitor none -bios none -kernel kernel/build/cory-riscv64.elf
 ```
 
-Or use the bundled check runner:
+Or use the developer runner to launch an existing image:
 
 ```sh
-tools/check.sh normal
-tools/check.sh all
+tools/dev.sh run-aarch64
+tools/dev.sh run-riscv64
 ```
+
+To rebuild the selected target before launching QEMU:
+
+```sh
+tools/dev.sh build-run-aarch64
+tools/dev.sh build-run-riscv64
+```
+
+Use `Ctrl-c` to quit these interactive QEMU runs.
 
 Use a different compiler binary with:
 
 ```sh
-CYNA=/path/to/cyna tools/check.sh all
+CYNA=/path/to/cyna tools/dev.sh all
 ```
 
 ## Probe Images
@@ -170,20 +186,20 @@ them under QEMU, and checks for expected output.
 Available probe groups:
 
 ```text
-tools/check.sh traps       # deliberate trap capture on both targets
-tools/check.sh restore     # exception return with eret/sret on both targets
-tools/check.sh sched       # trap-driven scheduler handoff on both targets
-tools/check.sh timerirq    # timer interrupt delivery on both targets
-tools/check.sh timerdiag   # AArch64 diagnostic tick policy
-tools/check.sh timersched  # timer-driven scheduler handoff on both targets
-tools/check.sh normalsched # AArch64 normal IRQ scheduler path
-tools/check.sh userret     # probe-only user-mode exception return
+tools/dev.sh traps       # deliberate trap capture on both targets
+tools/dev.sh restore     # exception return with eret/sret on both targets
+tools/dev.sh sched       # trap-driven scheduler handoff on both targets
+tools/dev.sh timerirq    # timer interrupt delivery on both targets
+tools/dev.sh timerdiag   # AArch64 diagnostic tick policy
+tools/dev.sh timersched  # timer-driven scheduler handoff on both targets
+tools/dev.sh normalsched # AArch64 normal IRQ scheduler path
+tools/dev.sh userret     # probe-only user-mode exception return
 ```
 
 For a full list of individual commands, run:
 
 ```sh
-tools/check.sh
+tools/dev.sh
 ```
 
 ## Reading Path
@@ -192,7 +208,7 @@ Start here:
 
 1. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the current codebase
 2. [`docs/SPEC.md`](docs/SPEC.md) for the design intent
-3. [`tools/check.sh`](tools/check.sh) for the executable validation matrix
+3. [`tools/dev.sh`](tools/dev.sh) for the executable validation matrix
 4. `kernel/src/platform/*/main.cy` for each target's boot composition
 
 ## GitHub Language Stats
