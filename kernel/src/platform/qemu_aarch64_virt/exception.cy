@@ -28,6 +28,7 @@ import .task.scheduler;
 import .task.context;
 import .task.user_program;
 import { UserProgramStatus } from .task.user_program;
+import .task.user_program_catalog;
 import .task.user_entry;
 import { UserEntryStatus } from .task.user_entry;
 
@@ -304,27 +305,27 @@ fn current_identity_user(raw_frame: *TrapFrame): void {
 }
 
 fn print_spawned_program(program_id: usize): void {
-    if program_id == 1 {
+    if program_id == user_program_catalog.selftest {
         println("userspace: normal user spawned selftest aarch64");
         return;
     }
-    if program_id == 2 {
+    if program_id == user_program_catalog.shell {
         println("userspace: normal user spawned shell aarch64");
         return;
     }
-    if program_id == 3 {
+    if program_id == user_program_catalog.echo {
         println("userspace: normal user spawned echo aarch64");
         return;
     }
-    if program_id == 4 {
+    if program_id == user_program_catalog.ps {
         println("userspace: normal user spawned ps aarch64");
         return;
     }
-    if program_id == 5 {
+    if program_id == user_program_catalog.ls {
         println("userspace: normal user spawned ls aarch64");
         return;
     }
-    if program_id == 6 {
+    if program_id == user_program_catalog.cat {
         println("userspace: normal user spawned cat aarch64");
         return;
     }

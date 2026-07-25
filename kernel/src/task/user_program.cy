@@ -6,10 +6,11 @@ import { UserImage } from .task.user_entry;
 import .memory.user_memory;
 import { Spec } from .memory.page_table;
 import .fs;
+import .task.user_program_catalog;
 
-pub const invalid_program_id: usize = 0;
+pub const invalid_program_id: usize = user_program_catalog.invalid_program_id;
 pub const max_programs: usize = 8;
-pub const max_program_name_len: usize = 16;
+pub const max_program_name_len: usize = user_program_catalog.max_name_len;
 
 pub enum UserProgramStatus: i32 {
     ok = 0,
@@ -103,83 +104,6 @@ fn image_from_initramfs(program_id: usize): UserImage {
     return image;
 }
 
-fn user_byte(addr: usize, offset: usize): u8 {
-    unchecked {
-        return *((addr + offset) as! *u8);
-    }
-}
-
-fn name_matches_selftest(addr: usize, len: usize): bool {
-    if len != 8 {
-        return false;
-    }
-    return user_byte(addr, 0) == 's' and user_byte(addr, 1) == 'e' and user_byte(addr, 2) == 'l' and user_byte(addr, 3) == 'f' and user_byte(addr, 4) == 't' and user_byte(addr, 5) == 'e' and user_byte(addr, 6) == 's' and user_byte(addr, 7) == 't';
-}
-
-fn name_matches_shell(addr: usize, len: usize): bool {
-    if len != 5 {
-        return false;
-    }
-    return user_byte(addr, 0) == 's' and user_byte(addr, 1) == 'h' and user_byte(addr, 2) == 'e' and user_byte(addr, 3) == 'l' and user_byte(addr, 4) == 'l';
-}
-
-fn name_matches_echo(addr: usize, len: usize): bool {
-    if len != 4 {
-        return false;
-    }
-    return user_byte(addr, 0) == 'e' and user_byte(addr, 1) == 'c' and user_byte(addr, 2) == 'h' and user_byte(addr, 3) == 'o';
-}
-
-fn name_matches_ps(addr: usize, len: usize): bool {
-    if len != 2 {
-        return false;
-    }
-    return user_byte(addr, 0) == 'p' and user_byte(addr, 1) == 's';
-}
-
-fn name_matches_ls(addr: usize, len: usize): bool {
-    if len != 2 {
-        return false;
-    }
-    return user_byte(addr, 0) == 'l' and user_byte(addr, 1) == 's';
-}
-
-fn name_matches_cat(addr: usize, len: usize): bool {
-    if len != 3 {
-        return false;
-    }
-    return user_byte(addr, 0) == 'c' and user_byte(addr, 1) == 'a' and user_byte(addr, 2) == 't';
-}
-
-fn name_to_program_id(addr: usize, len: usize): usize {
-    if name_matches_selftest(addr, len) {
-        return 1;
-    }
-    if name_matches_shell(addr, len) {
-        return 2;
-    }
-    if name_matches_echo(addr, len) {
-        return 3;
-    }
-    if name_matches_ps(addr, len) {
-        return 4;
-    }
-    if name_matches_ls(addr, len) {
-        return 5;
-    }
-    if name_matches_cat(addr, len) {
-        return 6;
-    }
-    return invalid_program_id;
-}
-
-fn path_has_bin_prefix(addr: usize, len: usize): bool {
-    if len <= 5 {
-        return false;
-    }
-    return user_byte(addr, 0) == '/' and user_byte(addr, 1) == 'b' and user_byte(addr, 2) == 'i' and user_byte(addr, 3) == 'n' and user_byte(addr, 4) == '/';
-}
-
 pub fn find_by_user_name(arch: i32, process_id: usize, addr: usize, len: usize, spec: Spec): usize {
     if len == 0 or len > max_program_name_len {
         last_status = UserProgramStatus.invalid_program;
@@ -189,7 +113,7 @@ pub fn find_by_user_name(arch: i32, process_id: usize, addr: usize, len: usize, 
         last_status = UserProgramStatus.invalid_user_buffer;
         return invalid_program_id;
     }
-    const program_id = name_to_program_id(addr, len);
+    const program_id = user_program_catalog.name_to_program_id(addr, len);
     if program_id != invalid_program_id {
         last_status = UserProgramStatus.ok;
         return program_id;
@@ -199,7 +123,7 @@ pub fn find_by_user_name(arch: i32, process_id: usize, addr: usize, len: usize, 
 }
 
 pub fn find_by_user_path(arch: i32, process_id: usize, addr: usize, len: usize, spec: Spec): usize {
-    if len <= 5 or len > max_program_name_len + 5 {
+    if len <= user_program_catalog.bin_prefix_len or len > max_program_name_len + user_program_catalog.bin_prefix_len {
         last_status = UserProgramStatus.invalid_program;
         return invalid_program_id;
     }
@@ -207,11 +131,7 @@ pub fn find_by_user_path(arch: i32, process_id: usize, addr: usize, len: usize, 
         last_status = UserProgramStatus.invalid_user_buffer;
         return invalid_program_id;
     }
-    if !path_has_bin_prefix(addr, len) {
-        last_status = UserProgramStatus.invalid_program;
-        return invalid_program_id;
-    }
-    const program_id = name_to_program_id(addr + 5, len - 5);
+    const program_id = user_program_catalog.path_to_program_id(addr, len);
     if program_id != invalid_program_id {
         last_status = UserProgramStatus.ok;
         return program_id;
