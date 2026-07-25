@@ -16,6 +16,7 @@ import .platform.qemu_riscv64_virt.memory as platform_memory;
 import .platform.qemu_riscv64_virt.tick;
 import .platform.qemu_riscv64_virt.vm_activation;
 import .syscall;
+import .syscall_error_map;
 import { SyscallError, SyscallOp, SyscallOrigin, SyscallRequest, SyscallResult } from .syscall;
 import .task.process;
 import .task.process_arg;
@@ -176,20 +177,6 @@ fn exit_current_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
     panic_mod.panic();
 }
 
-fn process_status_error(): SyscallError {
-    if process.status() == ProcessStatus.not_exited {
-        return SyscallError.process_not_exited;
-    }
-    return SyscallError.invalid_process;
-}
-
-fn reaper_status_error(): SyscallError {
-    if process_reaper.status() == ReapStatus.not_exited {
-        return SyscallError.process_not_exited;
-    }
-    return SyscallError.invalid_process;
-}
-
 fn wait_exited_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
     var code: usize = 0;
     if request.arg1 == 0 {
@@ -197,12 +184,12 @@ fn wait_exited_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
     } else {
         code = process_reaper.reap_exited_user(request.arg0);
         if process_reaper.status() != ReapStatus.ok {
-            return_result_to_user(raw_frame, syscall.error_result(reaper_status_error()));
+            return_result_to_user(raw_frame, syscall.error_result(syscall_error_map.reaper_status_error()));
             return;
         }
     }
     if process.status() != ProcessStatus.ok {
-        return_result_to_user(raw_frame, syscall.error_result(process_status_error()));
+        return_result_to_user(raw_frame, syscall.error_result(syscall_error_map.process_status_error()));
         return;
     }
     return_result_to_user(raw_frame, syscall.ok_result(code, request.arg0));
@@ -441,16 +428,6 @@ fn process_arg_read_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
     return_result_to_user(raw_frame, syscall.ok_result(copied, 0));
 }
 
-fn fs_status_error(): SyscallError {
-    if fs.status() == FsStatus.not_found {
-        return SyscallError.not_found;
-    }
-    if fs.status() == FsStatus.invalid_fd {
-        return SyscallError.invalid_fd;
-    }
-    return SyscallError.invalid_user_buffer;
-}
-
 fn fs_list_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
     const current_thread = thread.get(scheduler.current());
     if current_thread.id == thread.invalid_id {
@@ -461,7 +438,7 @@ fn fs_list_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
     const copied = fs.list_to_user(page_table.arch_id, current_thread.process_id, request.arg0, request.arg1, request.arg2, 128, page_table.spec());
     user_access_end();
     if copied == 0 and fs.status() != FsStatus.ok {
-        return_result_to_user(raw_frame, syscall.error_result(fs_status_error()));
+        return_result_to_user(raw_frame, syscall.error_result(syscall_error_map.fs_status_error()));
         return;
     }
     return_result_to_user(raw_frame, syscall.ok_result(copied, 0));
@@ -477,7 +454,7 @@ fn fs_read_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
     const copied = fs.read_to_user(page_table.arch_id, current_thread.process_id, request.arg0, request.arg1, request.arg2, 128, page_table.spec());
     user_access_end();
     if copied == 0 and fs.status() != FsStatus.ok {
-        return_result_to_user(raw_frame, syscall.error_result(fs_status_error()));
+        return_result_to_user(raw_frame, syscall.error_result(syscall_error_map.fs_status_error()));
         return;
     }
     return_result_to_user(raw_frame, syscall.ok_result(copied, 0));
@@ -493,7 +470,7 @@ fn fs_open_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
     const fd = fs.open(page_table.arch_id, current_thread.process_id, request.arg0, request.arg1, page_table.spec());
     user_access_end();
     if fd == 0 {
-        return_result_to_user(raw_frame, syscall.error_result(fs_status_error()));
+        return_result_to_user(raw_frame, syscall.error_result(syscall_error_map.fs_status_error()));
         return;
     }
     return_result_to_user(raw_frame, syscall.ok_result(fd, 0));
@@ -509,7 +486,7 @@ fn fs_fd_read_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
     const copied = fs.read_fd_to_user(page_table.arch_id, current_thread.process_id, request.arg0, request.arg1, request.arg2, page_table.spec());
     user_access_end();
     if copied == 0 and fs.status() != FsStatus.ok {
-        return_result_to_user(raw_frame, syscall.error_result(fs_status_error()));
+        return_result_to_user(raw_frame, syscall.error_result(syscall_error_map.fs_status_error()));
         return;
     }
     return_result_to_user(raw_frame, syscall.ok_result(copied, 0));
@@ -522,7 +499,7 @@ fn fs_close_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
         return;
     }
     if !fs.close(current_thread.process_id, request.arg0) {
-        return_result_to_user(raw_frame, syscall.error_result(fs_status_error()));
+        return_result_to_user(raw_frame, syscall.error_result(syscall_error_map.fs_status_error()));
         return;
     }
     return_result_to_user(raw_frame, syscall.ok_result(0, 0));

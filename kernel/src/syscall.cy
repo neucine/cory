@@ -82,6 +82,7 @@ pub const number_fs_fd_read: usize = 17;
 pub const number_fs_close: usize = 18;
 pub const number_program_find_path: usize = 19;
 pub const number_process_spawn_path: usize = 20;
+pub const aarch64_brk_prefix: usize = 0xf2000000;
 
 pub const asm_number_scheduler_yield_current: usize = 1;
 pub const asm_number_debug_write: usize = 3;
@@ -248,6 +249,17 @@ pub fn from_number(number: usize): SyscallOp {
         return SyscallOp.fs_close;
     }
     return SyscallOp.unknown;
+}
+
+pub fn number_from_aarch64_brk_esr(esr_el1: usize): usize {
+    if esr_el1 < aarch64_brk_prefix {
+        return number_unknown;
+    }
+    const number = esr_el1 - aarch64_brk_prefix;
+    if from_number(number) == SyscallOp.unknown {
+        return number_unknown;
+    }
+    return number;
 }
 
 pub fn decode_number(number: usize): SyscallOp {
