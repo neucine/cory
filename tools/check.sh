@@ -2,7 +2,7 @@
 set -eu
 
 CYNA="${CYNA:-/Users/chao.yang/Private/cyna/zig-out/bin/cyna}"
-QEMU_TIMEOUT="${QEMU_TIMEOUT:-12}"
+QEMU_TIMEOUT="${QEMU_TIMEOUT:-15}"
 
 usage() {
   cat <<'EOF'
@@ -75,10 +75,12 @@ run_qemu_expect() {
 }
 
 build_user_images() {
-  for program in init child shell echo ps; do
+  for program in init selftest shell echo ps ls cat; do
     "$CYNA" build "user/${program}.toml" --build aarch64
     "$CYNA" build "user/${program}.toml" --build riscv64
   done
+  python3 tools/mkinitramfs.py user/build/initramfs-aarch64.bin
+  python3 tools/mkinitramfs.py user/build/initramfs-riscv64.bin
 }
 
 generate_probe_manifest() {
@@ -165,21 +167,50 @@ run_aarch64() {
   "$CYNA" check kernel/cyna.toml --build aarch64
   "$CYNA" build kernel/cyna.toml --build aarch64
   run_qemu_expect aarch64 \
-    "userspace: normal user inspected program aarch64" \
-    "userspace: cy child ran ok" \
-    "userspace: child wait ok from init" \
+    "userspace: normal user spawned selftest aarch64" \
+    "userspace: cy selftest ran ok" \
+    "userspace: selftest wait ok from init" \
     "userspace: normal user spawned shell aarch64" \
     "cory> help" \
-    "shell: commands: help, echo, ps, exit" \
+    "shell: commands: help, cat, echo, ls, ps, selftest, exit" \
     "cory> ps" \
     "userspace: normal user spawned ps aarch64" \
     "ps: process table" \
+    "cory> ls" \
+    "userspace: normal user spawned ls aarch64" \
+    "/etc/motd" \
+    "cory> ls /bin" \
+    "userspace: normal user spawned ls aarch64" \
+    "cat" \
+    "echo" \
+    "selftest" \
+    "cory> selftest" \
+    "userspace: normal user spawned selftest aarch64" \
+    "userspace: cy selftest ran ok" \
+    "cory> ls /etc" \
+    "userspace: normal user spawned ls aarch64" \
+    "motd" \
+    "cory> cat /etc/motd" \
+    "userspace: normal user spawned cat aarch64" \
+    "hello from cory fs" \
     "cory> echo alive" \
     "userspace: normal user spawned echo aarch64" \
     "alive" \
+    "cory>   ps" \
+    "cory> echo   spaced" \
+    "spaced" \
     "cory> echo again" \
     "again" \
-    -- sh -c '{ sleep 2; printf "help\n"; sleep 1; printf "ps\n"; sleep 1; printf "echo alive\n"; sleep 1; printf "ps\n"; sleep 1; printf "echo again\n"; sleep 3; } | timeout "$1" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-aarch64.elf' sh "$QEMU_TIMEOUT"
+    -- sh -c 'python3 -c '"'"'import sys, time
+time.sleep(2)
+for line in ["help", "ps", "ls", "ls /bin", "selftest", "ls /etc", "cat /etc/motd", "echo alive", "  ps", "echo   spaced", "echo again"]:
+    for ch in line + "\n":
+        sys.stdout.write(ch)
+        sys.stdout.flush()
+        time.sleep(0.03)
+    time.sleep(0.7)
+time.sleep(3)
+'"'"' | timeout "$1" qemu-system-aarch64 -machine virt -cpu cortex-a53 -nographic -kernel kernel/build/cory-aarch64.elf' sh "$QEMU_TIMEOUT"
 }
 
 run_riscv64() {
@@ -187,21 +218,50 @@ run_riscv64() {
   "$CYNA" check kernel/cyna.toml --build riscv64
   "$CYNA" build kernel/cyna.toml --build riscv64
   run_qemu_expect riscv64 \
-    "userspace: normal user inspected program riscv64" \
-    "userspace: cy child ran ok" \
-    "userspace: child wait ok from init" \
+    "userspace: normal user spawned selftest riscv64" \
+    "userspace: cy selftest ran ok" \
+    "userspace: selftest wait ok from init" \
     "userspace: normal user spawned shell riscv64" \
     "cory> help" \
-    "shell: commands: help, echo, ps, exit" \
+    "shell: commands: help, cat, echo, ls, ps, selftest, exit" \
     "cory> ps" \
     "userspace: normal user spawned ps riscv64" \
     "ps: process table" \
+    "cory> ls" \
+    "userspace: normal user spawned ls riscv64" \
+    "/etc/motd" \
+    "cory> ls /bin" \
+    "userspace: normal user spawned ls riscv64" \
+    "cat" \
+    "echo" \
+    "selftest" \
+    "cory> selftest" \
+    "userspace: normal user spawned selftest riscv64" \
+    "userspace: cy selftest ran ok" \
+    "cory> ls /etc" \
+    "userspace: normal user spawned ls riscv64" \
+    "motd" \
+    "cory> cat /etc/motd" \
+    "userspace: normal user spawned cat riscv64" \
+    "hello from cory fs" \
     "cory> echo alive" \
     "userspace: normal user spawned echo riscv64" \
     "alive" \
+    "cory>   ps" \
+    "cory> echo   spaced" \
+    "spaced" \
     "cory> echo again" \
     "again" \
-    -- sh -c '{ sleep 2; printf "help\n"; sleep 1; printf "ps\n"; sleep 1; printf "echo alive\n"; sleep 1; printf "ps\n"; sleep 1; printf "echo again\n"; sleep 3; } | timeout "$1" qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-riscv64.elf' sh "$QEMU_TIMEOUT"
+    -- sh -c 'python3 -c '"'"'import sys, time
+time.sleep(2)
+for line in ["help", "ps", "ls", "ls /bin", "selftest", "ls /etc", "cat /etc/motd", "echo alive", "  ps", "echo   spaced", "echo again"]:
+    for ch in line + "\n":
+        sys.stdout.write(ch)
+        sys.stdout.flush()
+        time.sleep(0.03)
+    time.sleep(0.7)
+time.sleep(3)
+'"'"' | timeout "$1" qemu-system-riscv64 -machine virt -nographic -bios none -kernel kernel/build/cory-riscv64.elf' sh "$QEMU_TIMEOUT"
 }
 
 run_trap_aarch64() {

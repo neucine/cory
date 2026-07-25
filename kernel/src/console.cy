@@ -5,6 +5,7 @@ extern c("cory_console_try_getc") fn platform_try_getc(): c_ulong;
 
 pub const no_input: usize = 256;
 pub const newline: usize = 10;
+pub const carriage_return: usize = 13;
 pub const help_exit_script_len: usize = 10;
 const input_capacity: usize = 64;
 

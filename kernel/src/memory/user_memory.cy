@@ -90,6 +90,34 @@ pub fn write_byte_to_user(arch: i32, process_id: usize, addr: usize, value: usiz
     return true;
 }
 
+fn normalize_line_byte(ch: usize): usize {
+    if ch == console.carriage_return {
+        return console.newline;
+    }
+    return ch;
+}
+
+fn line_byte_is_backspace(ch: usize): bool {
+    return ch == 8 or ch == 127;
+}
+
+fn echo_backspace(): void {
+    console.putc(8);
+    console.putc(32);
+    console.putc(8);
+}
+
+fn echo_pending_line(addr: usize, echoed: usize, copied: usize): usize {
+    unchecked {
+        var index = echoed;
+        while index < copied {
+            console.putc(*((addr + index) as! *u8));
+            index = index + 1;
+        }
+    }
+    return copied;
+}
+
 pub fn read_line_from_console_to_user(arch: i32, process_id: usize, addr: usize, len: usize, spec: Spec): usize {
     if !validate_user_range(arch, process_id, addr, len, spec) {
         return 0;
@@ -97,6 +125,7 @@ pub fn read_line_from_console_to_user(arch: i32, process_id: usize, addr: usize,
 
     unchecked {
         var copied: usize = 0;
+        var echoed: usize = 0;
         while copied < len {
             const next = console.read_byte();
             if next == console.no_input {
@@ -104,12 +133,25 @@ pub fn read_line_from_console_to_user(arch: i32, process_id: usize, addr: usize,
                     last_status = UserMemoryStatus.no_input;
                     return 0;
                 }
+                echoed = echo_pending_line(addr, echoed, copied);
                 last_status = UserMemoryStatus.ok;
                 return copied;
             }
-            *((addr + copied) as! *u8) = next as u8;
+            if line_byte_is_backspace(next) {
+                if copied > 0 {
+                    copied = copied - 1;
+                    if echoed > copied {
+                        echo_backspace();
+                        echoed = copied;
+                    }
+                }
+                continue;
+            }
+            const normalized = normalize_line_byte(next);
+            *((addr + copied) as! *u8) = normalized as u8;
             copied = copied + 1;
-            if next == console.newline {
+            if normalized == console.newline {
+                echoed = echo_pending_line(addr, echoed, copied);
                 last_status = UserMemoryStatus.ok;
                 return copied;
             }
@@ -126,18 +168,35 @@ pub fn read_line_blocking_from_console_to_user(arch: i32, process_id: usize, add
 
     unchecked {
         var copied: usize = 0;
+        var echoed: usize = 0;
         while copied < len {
             const next = console.read_byte();
             if next == console.no_input {
+                if copied > echoed {
+                    echoed = echo_pending_line(addr, echoed, copied);
+                }
                 continue;
             }
-            *((addr + copied) as! *u8) = next as u8;
+            if line_byte_is_backspace(next) {
+                if copied > 0 {
+                    copied = copied - 1;
+                    if echoed > copied {
+                        echo_backspace();
+                        echoed = copied;
+                    }
+                }
+                continue;
+            }
+            const normalized = normalize_line_byte(next);
+            *((addr + copied) as! *u8) = normalized as u8;
             copied = copied + 1;
-            if next == console.newline {
+            if normalized == console.newline {
+                echoed = echo_pending_line(addr, echoed, copied);
                 last_status = UserMemoryStatus.ok;
                 return copied;
             }
         }
+        echoed = echo_pending_line(addr, echoed, copied);
         last_status = UserMemoryStatus.ok;
         return copied;
     }
