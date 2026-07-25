@@ -5,12 +5,7 @@ import .task.user_entry;
 import { UserImage } from .task.user_entry;
 import .memory.user_memory;
 import { Spec } from .memory.page_table;
-
-extern c("cory_user_program_image_phys") fn platform_image_phys(program_id: c_ulong): c_ulong;
-extern c("cory_user_program_image_entry_phys") fn platform_image_entry_phys(program_id: c_ulong): c_ulong;
-extern c("cory_user_program_image_header_size") fn platform_image_header_size(program_id: c_ulong): c_ulong;
-extern c("cory_user_program_image_code_size") fn platform_image_code_size(program_id: c_ulong): c_ulong;
-extern c("cory_user_program_image_stack_pages") fn platform_image_stack_pages(program_id: c_ulong): c_ulong;
+import .fs;
 
 pub const invalid_program_id: usize = 0;
 pub const max_programs: usize = 8;
@@ -96,19 +91,16 @@ fn program_exists(program_id: usize): bool {
     return index_for_program(program_id) < max_programs;
 }
 
-fn image_from_platform(program_id: usize): UserImage {
-    const image_phys = platform_image_phys(program_id as c_ulong) as usize;
+fn image_from_initramfs(program_id: usize): UserImage {
+    const image_phys = fs.bin_program_data_addr(program_id);
     if image_phys == 0 {
         return user_entry.image_from_parts(0, 0, 0, 0, 0, false);
     }
-    return user_entry.image_from_parts(
-        image_phys,
-        platform_image_entry_phys(program_id as c_ulong) as usize,
-        platform_image_header_size(program_id as c_ulong) as usize,
-        platform_image_code_size(program_id as c_ulong) as usize,
-        platform_image_stack_pages(program_id as c_ulong) as usize,
-        false
-    );
+    const image = user_entry.image_from_header(image_phys);
+    if image.image_phys == 0 {
+        return image;
+    }
+    return image;
 }
 
 fn user_byte(addr: usize, offset: usize): u8 {
@@ -334,10 +326,10 @@ pub fn image_from_program(program: UserProgram): UserImage {
 }
 
 pub fn image_for_program(program_id: usize): UserImage {
-    const platform_image = image_from_platform(program_id);
-    if platform_image.image_phys != 0 {
+    const fs_image = image_from_initramfs(program_id);
+    if fs_image.image_phys != 0 {
         last_status = UserProgramStatus.ok;
-        return platform_image;
+        return fs_image;
     }
     const index = index_for_program(program_id);
     if index >= max_programs {
@@ -353,7 +345,7 @@ pub fn image_for_program(program_id: usize): UserImage {
 }
 
 pub fn get(program_id: usize): UserProgram {
-    const direct_image = image_from_platform(program_id);
+    const direct_image = image_from_initramfs(program_id);
     if direct_image.image_phys != 0 {
         last_status = UserProgramStatus.ok;
         return UserProgram {
@@ -372,16 +364,16 @@ pub fn get(program_id: usize): UserProgram {
     while index < used_programs and index < max_programs {
         if program_ids[index] == program_id {
             saw_program = true;
-            const platform_image = image_from_platform(program_id);
-            if platform_image.image_phys != 0 {
+            const fs_image = image_from_initramfs(program_id);
+            if fs_image.image_phys != 0 {
                 last_status = UserProgramStatus.ok;
                 return UserProgram {
                     program_id: program_ids[index],
-                    image_phys: platform_image.image_phys,
-                    image_entry_phys: platform_image.entry_phys,
-                    image_header_size: platform_image.header_size,
-                    image_code_size: platform_image.code_size,
-                    image_stack_pages: platform_image.stack_pages,
+                    image_phys: fs_image.image_phys,
+                    image_entry_phys: fs_image.entry_phys,
+                    image_header_size: fs_image.header_size,
+                    image_code_size: fs_image.code_size,
+                    image_stack_pages: fs_image.stack_pages,
                     process_id: process.invalid_id,
                     thread_id: thread.invalid_id,
                 };

@@ -24,6 +24,12 @@ const archive_record_size: usize = 88;
 const archive_kind_dir: usize = 1;
 const archive_kind_file: usize = 2;
 const root_record_index: usize = 0;
+const program_selftest: usize = 1;
+const program_shell: usize = 2;
+const program_echo: usize = 3;
+const program_ps: usize = 4;
+const program_ls: usize = 5;
+const program_cat: usize = 6;
 
 var last_status: FsStatus = FsStatus.ok;
 var fd_live: [32]bool = [false] ** 32;
@@ -146,6 +152,92 @@ fn record_matches_user_path(record_index: usize, path: usize, path_len: usize): 
     return true;
 }
 
+fn bin_program_path_len(program_id: usize): usize {
+    if program_id == program_selftest {
+        return 13;
+    }
+    if program_id == program_shell {
+        return 10;
+    }
+    if program_id == program_echo {
+        return 9;
+    }
+    if program_id == program_ps {
+        return 7;
+    }
+    if program_id == program_ls {
+        return 7;
+    }
+    if program_id == program_cat {
+        return 8;
+    }
+    return 0;
+}
+
+fn bin_program_name_byte(program_id: usize, offset: usize): u8 {
+    if program_id == program_selftest {
+        if offset == 0 { return 's'; }
+        if offset == 1 { return 'e'; }
+        if offset == 2 { return 'l'; }
+        if offset == 3 { return 'f'; }
+        if offset == 4 { return 't'; }
+        if offset == 5 { return 'e'; }
+        if offset == 6 { return 's'; }
+        if offset == 7 { return 't'; }
+    }
+    if program_id == program_shell {
+        if offset == 0 { return 's'; }
+        if offset == 1 { return 'h'; }
+        if offset == 2 { return 'e'; }
+        if offset == 3 { return 'l'; }
+        if offset == 4 { return 'l'; }
+    }
+    if program_id == program_echo {
+        if offset == 0 { return 'e'; }
+        if offset == 1 { return 'c'; }
+        if offset == 2 { return 'h'; }
+        if offset == 3 { return 'o'; }
+    }
+    if program_id == program_ps {
+        if offset == 0 { return 'p'; }
+        if offset == 1 { return 's'; }
+    }
+    if program_id == program_ls {
+        if offset == 0 { return 'l'; }
+        if offset == 1 { return 's'; }
+    }
+    if program_id == program_cat {
+        if offset == 0 { return 'c'; }
+        if offset == 1 { return 'a'; }
+        if offset == 2 { return 't'; }
+    }
+    return 0;
+}
+
+fn bin_program_path_byte(program_id: usize, offset: usize): u8 {
+    if offset == 0 { return '/'; }
+    if offset == 1 { return 'b'; }
+    if offset == 2 { return 'i'; }
+    if offset == 3 { return 'n'; }
+    if offset == 4 { return '/'; }
+    return bin_program_name_byte(program_id, offset - 5);
+}
+
+fn record_matches_bin_program(record_index: usize, program_id: usize): bool {
+    const path_len = bin_program_path_len(program_id);
+    if path_len == 0 or record_path_len(record_index) != path_len {
+        return false;
+    }
+    var index: usize = 0;
+    while index < path_len {
+        if record_path_byte(record_index, index) != bin_program_path_byte(program_id, index) {
+            return false;
+        }
+        index = index + 1;
+    }
+    return true;
+}
+
 fn record_id_for_user_path(path: usize, path_len: usize): usize {
     if !archive_valid() {
         return fd_record_none;
@@ -153,6 +245,20 @@ fn record_id_for_user_path(path: usize, path_len: usize): usize {
     var index: usize = 0;
     while index < archive_record_count() {
         if record_matches_user_path(index, path, path_len) {
+            return index + 1;
+        }
+        index = index + 1;
+    }
+    return fd_record_none;
+}
+
+fn record_id_for_bin_program(program_id: usize): usize {
+    if !archive_valid() {
+        return fd_record_none;
+    }
+    var index: usize = 0;
+    while index < archive_record_count() {
+        if record_matches_bin_program(index, program_id) {
             return index + 1;
         }
         index = index + 1;
@@ -411,6 +517,33 @@ pub fn read_fd_to_user(arch: i32, process_id: usize, fd: usize, out: usize, max_
     fd_offset[index] = fd_offset[index] + copied;
     last_status = FsStatus.ok;
     return copied;
+}
+
+pub fn bin_program_data_addr(program_id: usize): usize {
+    const record_id = record_id_for_bin_program(program_id);
+    if record_id == fd_record_none {
+        return 0;
+    }
+    const record_index = record_id - 1;
+    if record_kind(record_index) != archive_kind_file {
+        return 0;
+    }
+    if record_data_len(record_index) == 0 {
+        return 0;
+    }
+    return archive_base() + record_data_offset(record_index);
+}
+
+pub fn bin_program_data_len(program_id: usize): usize {
+    const record_id = record_id_for_bin_program(program_id);
+    if record_id == fd_record_none {
+        return 0;
+    }
+    const record_index = record_id - 1;
+    if record_kind(record_index) != archive_kind_file {
+        return 0;
+    }
+    return record_data_len(record_index);
 }
 
 pub fn close(process_id: usize, fd: usize): bool {

@@ -30,12 +30,6 @@ extern c("cory_normal_thread_a_stack_top") fn normal_thread_a_stack_top(): c_ulo
 extern c("cory_normal_thread_b_entry_addr") fn normal_thread_b_entry_addr(): c_ulong;
 extern c("cory_normal_thread_b_stack_top") fn normal_thread_b_stack_top(): c_ulong;
 extern c("cory_normal_user_image_addr") fn normal_user_image_addr(): c_ulong;
-extern c("cory_normal_selftest_user_image_addr") fn normal_selftest_user_image_addr(): c_ulong;
-extern c("cory_normal_shell_user_image_addr") fn normal_shell_user_image_addr(): c_ulong;
-extern c("cory_normal_echo_user_image_addr") fn normal_echo_user_image_addr(): c_ulong;
-extern c("cory_normal_ps_user_image_addr") fn normal_ps_user_image_addr(): c_ulong;
-extern c("cory_normal_ls_user_image_addr") fn normal_ls_user_image_addr(): c_ulong;
-extern c("cory_normal_cat_user_image_addr") fn normal_cat_user_image_addr(): c_ulong;
 extern c("cory_arch_yield_trap") fn yield_trap(): void;
 extern c("cory_arch_block_trap") fn block_trap(): void;
 
@@ -149,55 +143,6 @@ fn prepare_normal_user_thread(active_root: usize): usize {
         panic_mod.panic();
     }
     return plan.thread_id;
-}
-
-fn image_header_for_program(program_id: usize): usize {
-    if program_id == 1 {
-        return normal_selftest_user_image_addr() as usize;
-    }
-    if program_id == 2 {
-        return normal_shell_user_image_addr() as usize;
-    }
-    if program_id == 3 {
-        return normal_echo_user_image_addr() as usize;
-    }
-    if program_id == 4 {
-        return normal_ps_user_image_addr() as usize;
-    }
-    if program_id == 5 {
-        return normal_ls_user_image_addr() as usize;
-    }
-    if program_id == 6 {
-        return normal_cat_user_image_addr() as usize;
-    }
-    return 0;
-}
-
-export c("cory_user_program_image_phys") fn cory_user_program_image_phys(program_id: c_ulong): c_ulong {
-    const header = image_header_for_program(program_id as usize);
-    if !user_entry.image_header_is_valid(header) {
-        return 0;
-    }
-    return header as c_ulong;
-}
-
-export c("cory_user_program_image_entry_phys") fn cory_user_program_image_entry_phys(program_id: c_ulong): c_ulong {
-    return user_entry.image_header_entry_phys(image_header_for_program(program_id as usize)) as c_ulong;
-}
-
-export c("cory_user_program_image_header_size") fn cory_user_program_image_header_size(program_id: c_ulong): c_ulong {
-    if !user_entry.image_header_is_valid(image_header_for_program(program_id as usize)) {
-        return 0;
-    }
-    return user_entry.image_header_size as c_ulong;
-}
-
-export c("cory_user_program_image_code_size") fn cory_user_program_image_code_size(program_id: c_ulong): c_ulong {
-    return user_entry.image_header_code_size(image_header_for_program(program_id as usize)) as c_ulong;
-}
-
-export c("cory_user_program_image_stack_pages") fn cory_user_program_image_stack_pages(program_id: c_ulong): c_ulong {
-    return user_entry.image_header_stack_pages(image_header_for_program(program_id as usize)) as c_ulong;
 }
 
 export c("cory_normal_thread_a") fn cory_normal_thread_a(): void {
