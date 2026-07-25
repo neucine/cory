@@ -1,5 +1,6 @@
 import .memory.address_space;
 import .memory.page_table_pages;
+import .fs;
 import .memory.phys;
 import .task.context;
 import .task.process;
@@ -64,6 +65,7 @@ pub fn reap_exited_user(process_id: usize): usize {
     const child_address_space = proc.address_space_id;
     const child_root = address_space.root_table(child_address_space);
     process_arg.clear_for_process(process_id);
+    fs.clear_for_process(process_id);
     process_resources.clear(process_id);
     const code = process.reap_exited(process_id);
     if process.status() != ProcessStatus.ok {

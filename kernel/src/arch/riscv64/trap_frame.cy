@@ -273,6 +273,12 @@ pub fn argument4_from_frame(frame: *TrapFrame): usize {
     }
 }
 
+pub fn argument5_from_frame(frame: *TrapFrame): usize {
+    unchecked {
+        return (*frame).a5 as usize;
+    }
+}
+
 pub fn set_resume_state_in_frame(frame: *TrapFrame, instruction_pointer: usize, stack_pointer: usize, status_flags: usize): void {
     unchecked {
         (*frame).sepc = instruction_pointer as c_ulong;

@@ -3,9 +3,18 @@ import .task.thread;
 import { ThreadState } from .task.thread;
 import .task.user_entry;
 import { UserImage } from .task.user_entry;
+import .memory.user_memory;
+import { Spec } from .memory.page_table;
+
+extern c("cory_user_program_image_phys") fn platform_image_phys(program_id: c_ulong): c_ulong;
+extern c("cory_user_program_image_entry_phys") fn platform_image_entry_phys(program_id: c_ulong): c_ulong;
+extern c("cory_user_program_image_header_size") fn platform_image_header_size(program_id: c_ulong): c_ulong;
+extern c("cory_user_program_image_code_size") fn platform_image_code_size(program_id: c_ulong): c_ulong;
+extern c("cory_user_program_image_stack_pages") fn platform_image_stack_pages(program_id: c_ulong): c_ulong;
 
 pub const invalid_program_id: usize = 0;
 pub const max_programs: usize = 8;
+pub const max_program_name_len: usize = 16;
 
 pub enum UserProgramStatus: i32 {
     ok = 0,
@@ -17,6 +26,7 @@ pub enum UserProgramStatus: i32 {
     active_process,
     exited_process,
     invalid_image,
+    invalid_user_buffer,
 }
 
 pub struct UserProgram {
@@ -84,6 +94,138 @@ fn index_for_program(program_id: usize): usize {
 
 fn program_exists(program_id: usize): bool {
     return index_for_program(program_id) < max_programs;
+}
+
+fn image_from_platform(program_id: usize): UserImage {
+    const image_phys = platform_image_phys(program_id as c_ulong) as usize;
+    if image_phys == 0 {
+        return user_entry.image_from_parts(0, 0, 0, 0, 0, false);
+    }
+    return user_entry.image_from_parts(
+        image_phys,
+        platform_image_entry_phys(program_id as c_ulong) as usize,
+        platform_image_header_size(program_id as c_ulong) as usize,
+        platform_image_code_size(program_id as c_ulong) as usize,
+        platform_image_stack_pages(program_id as c_ulong) as usize,
+        false
+    );
+}
+
+fn user_byte(addr: usize, offset: usize): u8 {
+    unchecked {
+        return *((addr + offset) as! *u8);
+    }
+}
+
+fn name_matches_selftest(addr: usize, len: usize): bool {
+    if len != 8 {
+        return false;
+    }
+    return user_byte(addr, 0) == 's' and user_byte(addr, 1) == 'e' and user_byte(addr, 2) == 'l' and user_byte(addr, 3) == 'f' and user_byte(addr, 4) == 't' and user_byte(addr, 5) == 'e' and user_byte(addr, 6) == 's' and user_byte(addr, 7) == 't';
+}
+
+fn name_matches_shell(addr: usize, len: usize): bool {
+    if len != 5 {
+        return false;
+    }
+    return user_byte(addr, 0) == 's' and user_byte(addr, 1) == 'h' and user_byte(addr, 2) == 'e' and user_byte(addr, 3) == 'l' and user_byte(addr, 4) == 'l';
+}
+
+fn name_matches_echo(addr: usize, len: usize): bool {
+    if len != 4 {
+        return false;
+    }
+    return user_byte(addr, 0) == 'e' and user_byte(addr, 1) == 'c' and user_byte(addr, 2) == 'h' and user_byte(addr, 3) == 'o';
+}
+
+fn name_matches_ps(addr: usize, len: usize): bool {
+    if len != 2 {
+        return false;
+    }
+    return user_byte(addr, 0) == 'p' and user_byte(addr, 1) == 's';
+}
+
+fn name_matches_ls(addr: usize, len: usize): bool {
+    if len != 2 {
+        return false;
+    }
+    return user_byte(addr, 0) == 'l' and user_byte(addr, 1) == 's';
+}
+
+fn name_matches_cat(addr: usize, len: usize): bool {
+    if len != 3 {
+        return false;
+    }
+    return user_byte(addr, 0) == 'c' and user_byte(addr, 1) == 'a' and user_byte(addr, 2) == 't';
+}
+
+fn name_to_program_id(addr: usize, len: usize): usize {
+    if name_matches_selftest(addr, len) {
+        return 1;
+    }
+    if name_matches_shell(addr, len) {
+        return 2;
+    }
+    if name_matches_echo(addr, len) {
+        return 3;
+    }
+    if name_matches_ps(addr, len) {
+        return 4;
+    }
+    if name_matches_ls(addr, len) {
+        return 5;
+    }
+    if name_matches_cat(addr, len) {
+        return 6;
+    }
+    return invalid_program_id;
+}
+
+fn path_has_bin_prefix(addr: usize, len: usize): bool {
+    if len <= 5 {
+        return false;
+    }
+    return user_byte(addr, 0) == '/' and user_byte(addr, 1) == 'b' and user_byte(addr, 2) == 'i' and user_byte(addr, 3) == 'n' and user_byte(addr, 4) == '/';
+}
+
+pub fn find_by_user_name(arch: i32, process_id: usize, addr: usize, len: usize, spec: Spec): usize {
+    if len == 0 or len > max_program_name_len {
+        last_status = UserProgramStatus.invalid_program;
+        return invalid_program_id;
+    }
+    if !user_memory.validate_user_range(arch, process_id, addr, len, spec) {
+        last_status = UserProgramStatus.invalid_user_buffer;
+        return invalid_program_id;
+    }
+    const program_id = name_to_program_id(addr, len);
+    if program_id != invalid_program_id {
+        last_status = UserProgramStatus.ok;
+        return program_id;
+    }
+    last_status = UserProgramStatus.invalid_program;
+    return invalid_program_id;
+}
+
+pub fn find_by_user_path(arch: i32, process_id: usize, addr: usize, len: usize, spec: Spec): usize {
+    if len <= 5 or len > max_program_name_len + 5 {
+        last_status = UserProgramStatus.invalid_program;
+        return invalid_program_id;
+    }
+    if !user_memory.validate_user_range(arch, process_id, addr, len, spec) {
+        last_status = UserProgramStatus.invalid_user_buffer;
+        return invalid_program_id;
+    }
+    if !path_has_bin_prefix(addr, len) {
+        last_status = UserProgramStatus.invalid_program;
+        return invalid_program_id;
+    }
+    const program_id = name_to_program_id(addr + 5, len - 5);
+    if program_id != invalid_program_id {
+        last_status = UserProgramStatus.ok;
+        return program_id;
+    }
+    last_status = UserProgramStatus.invalid_program;
+    return invalid_program_id;
 }
 
 fn prepared_instance_exists(program_id: usize, process_id: usize, thread_id: usize): bool {
@@ -187,37 +329,16 @@ pub fn register_image(program_id: usize, image: UserImage): bool {
     return true;
 }
 
-pub fn refresh_image(program_id: usize, image: UserImage): bool {
-    const index = index_for_program(program_id);
-    if index >= max_programs {
-        last_status = UserProgramStatus.invalid_program;
-        return false;
-    }
-    if image.image_phys == 0 {
-        last_status = UserProgramStatus.invalid_image;
-        return false;
-    }
-    image_phys_values[index] = image.image_phys;
-    image_entry_phys_values[index] = image.entry_phys;
-    image_header_size_values[index] = image.header_size;
-    image_code_size_values[index] = image.code_size;
-    image_stack_pages_values[index] = image.stack_pages;
-    last_status = UserProgramStatus.ok;
-    return true;
-}
-
-pub fn register_or_refresh_image(program_id: usize, image: UserImage): bool {
-    if program_exists(program_id) {
-        return refresh_image(program_id, image);
-    }
-    return register_image(program_id, image);
-}
-
 pub fn image_from_program(program: UserProgram): UserImage {
     return user_entry.image_from_parts(program.image_phys, program.image_entry_phys, program.image_header_size, program.image_code_size, program.image_stack_pages, false);
 }
 
 pub fn image_for_program(program_id: usize): UserImage {
+    const platform_image = image_from_platform(program_id);
+    if platform_image.image_phys != 0 {
+        last_status = UserProgramStatus.ok;
+        return platform_image;
+    }
     const index = index_for_program(program_id);
     if index >= max_programs {
         last_status = UserProgramStatus.invalid_program;
@@ -232,11 +353,39 @@ pub fn image_for_program(program_id: usize): UserImage {
 }
 
 pub fn get(program_id: usize): UserProgram {
+    const direct_image = image_from_platform(program_id);
+    if direct_image.image_phys != 0 {
+        last_status = UserProgramStatus.ok;
+        return UserProgram {
+            program_id: program_id,
+            image_phys: direct_image.image_phys,
+            image_entry_phys: direct_image.entry_phys,
+            image_header_size: direct_image.header_size,
+            image_code_size: direct_image.code_size,
+            image_stack_pages: direct_image.stack_pages,
+            process_id: process.invalid_id,
+            thread_id: thread.invalid_id,
+        };
+    }
     var saw_program = false;
     var index: usize = 0;
     while index < used_programs and index < max_programs {
         if program_ids[index] == program_id {
             saw_program = true;
+            const platform_image = image_from_platform(program_id);
+            if platform_image.image_phys != 0 {
+                last_status = UserProgramStatus.ok;
+                return UserProgram {
+                    program_id: program_ids[index],
+                    image_phys: platform_image.image_phys,
+                    image_entry_phys: platform_image.entry_phys,
+                    image_header_size: platform_image.header_size,
+                    image_code_size: platform_image.code_size,
+                    image_stack_pages: platform_image.stack_pages,
+                    process_id: process.invalid_id,
+                    thread_id: thread.invalid_id,
+                };
+            }
             const entry = UserProgram {
                 program_id: program_ids[index],
                 image_phys: image_phys_values[index],

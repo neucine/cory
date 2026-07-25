@@ -227,6 +227,52 @@ fn load_image_from_header_with_activation(header_phys: usize, activate_process: 
     }
 }
 
+pub fn image_header_is_valid(header_phys: usize): bool {
+    if header_phys == 0 {
+        return false;
+    }
+    unchecked {
+        const header = header_phys as! *UserImageHeader;
+        if (*header).magic as usize != image_magic {
+            return false;
+        }
+        if (*header).version as usize != image_version {
+            return false;
+        }
+        return (*header).header_size as usize == image_header_size;
+    }
+}
+
+pub fn image_header_entry_phys(header_phys: usize): usize {
+    if !image_header_is_valid(header_phys) {
+        return 0;
+    }
+    unchecked {
+        const header = header_phys as! *UserImageHeader;
+        return header_phys + ((*header).entry_offset as usize);
+    }
+}
+
+pub fn image_header_code_size(header_phys: usize): usize {
+    if !image_header_is_valid(header_phys) {
+        return 0;
+    }
+    unchecked {
+        const header = header_phys as! *UserImageHeader;
+        return (*header).code_size as usize;
+    }
+}
+
+pub fn image_header_stack_pages(header_phys: usize): usize {
+    if !image_header_is_valid(header_phys) {
+        return 0;
+    }
+    unchecked {
+        const header = header_phys as! *UserImageHeader;
+        return (*header).stack_pages as usize;
+    }
+}
+
 pub fn image_from_header(header_phys: usize): UserImage {
     return load_image_from_header_with_activation(header_phys, false);
 }

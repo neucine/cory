@@ -23,7 +23,6 @@ import .task.scheduler;
 import .task.thread;
 import .task.user_entry;
 import { UserEntryStatus } from .task.user_entry;
-import .task.user_program;
 
 extern c("cory_riscv64_flush_kernel_tlb") fn flush_kernel_tlb(): void;
 extern c("cory_normal_thread_a_entry_addr") fn normal_thread_a_entry_addr(): c_ulong;
@@ -31,10 +30,12 @@ extern c("cory_normal_thread_a_stack_top") fn normal_thread_a_stack_top(): c_ulo
 extern c("cory_normal_thread_b_entry_addr") fn normal_thread_b_entry_addr(): c_ulong;
 extern c("cory_normal_thread_b_stack_top") fn normal_thread_b_stack_top(): c_ulong;
 extern c("cory_normal_user_image_addr") fn normal_user_image_addr(): c_ulong;
-extern c("cory_normal_child_user_image_addr") fn normal_child_user_image_addr(): c_ulong;
+extern c("cory_normal_selftest_user_image_addr") fn normal_selftest_user_image_addr(): c_ulong;
 extern c("cory_normal_shell_user_image_addr") fn normal_shell_user_image_addr(): c_ulong;
 extern c("cory_normal_echo_user_image_addr") fn normal_echo_user_image_addr(): c_ulong;
 extern c("cory_normal_ps_user_image_addr") fn normal_ps_user_image_addr(): c_ulong;
+extern c("cory_normal_ls_user_image_addr") fn normal_ls_user_image_addr(): c_ulong;
+extern c("cory_normal_cat_user_image_addr") fn normal_cat_user_image_addr(): c_ulong;
 extern c("cory_arch_yield_trap") fn yield_trap(): void;
 extern c("cory_arch_block_trap") fn block_trap(): void;
 
@@ -150,79 +151,53 @@ fn prepare_normal_user_thread(active_root: usize): usize {
     return plan.thread_id;
 }
 
-fn prepare_child_user_thread(active_root: usize): usize {
-    const image = user_entry.image_from_header(normal_child_user_image_addr() as usize);
-    const plan = user_entry.prepare_spawned_image_thread(page_table.arch_id, active_root, page_table.spec(), image);
-    if plan.status != UserEntryStatus.ok {
-        println("userspace: child user prepare failed riscv64");
-        panic_mod.panic();
+fn image_header_for_program(program_id: usize): usize {
+    if program_id == 1 {
+        return normal_selftest_user_image_addr() as usize;
     }
-    if !plan.address_space_switch_supported {
-        println("userspace: child user switch unsupported riscv64");
-        panic_mod.panic();
+    if program_id == 2 {
+        return normal_shell_user_image_addr() as usize;
     }
-    const user_context = context.get(plan.thread_id);
-    if !context.save_resume_state(plan.thread_id, plan.entry_addr, plan.stack_pointer, user_context.status_flags) {
-        println("userspace: child user seed failed riscv64");
-        panic_mod.panic();
+    if program_id == 3 {
+        return normal_echo_user_image_addr() as usize;
     }
-    if !trap_context.seed_resume_frame(plan.arch_context_id, plan.entry_addr, plan.stack_pointer, user_context.status_flags) {
-        println("userspace: child user frame seed failed riscv64");
-        panic_mod.panic();
+    if program_id == 4 {
+        return normal_ps_user_image_addr() as usize;
     }
-    if !user_program.register_prepared(1, plan.process_id, plan.thread_id) {
-        println("userspace: child user register failed riscv64");
-        panic_mod.panic();
+    if program_id == 5 {
+        return normal_ls_user_image_addr() as usize;
     }
-    return plan.thread_id;
+    if program_id == 6 {
+        return normal_cat_user_image_addr() as usize;
+    }
+    return 0;
 }
 
-fn prepare_shell_user_thread(active_root: usize): usize {
-    const image = user_entry.image_from_header(normal_shell_user_image_addr() as usize);
-    const plan = user_entry.prepare_spawned_image_thread(page_table.arch_id, active_root, page_table.spec(), image);
-    if plan.status != UserEntryStatus.ok {
-        println("userspace: shell user prepare failed riscv64");
-        panic_mod.panic();
+export c("cory_user_program_image_phys") fn cory_user_program_image_phys(program_id: c_ulong): c_ulong {
+    const header = image_header_for_program(program_id as usize);
+    if !user_entry.image_header_is_valid(header) {
+        return 0;
     }
-    if !plan.address_space_switch_supported {
-        println("userspace: shell user switch unsupported riscv64");
-        panic_mod.panic();
-    }
-    const user_context = context.get(plan.thread_id);
-    if !context.save_resume_state(plan.thread_id, plan.entry_addr, plan.stack_pointer, user_context.status_flags) {
-        println("userspace: shell user seed failed riscv64");
-        panic_mod.panic();
-    }
-    if !trap_context.seed_resume_frame(plan.arch_context_id, plan.entry_addr, plan.stack_pointer, user_context.status_flags) {
-        println("userspace: shell user frame seed failed riscv64");
-        panic_mod.panic();
-    }
-    if !user_program.register_prepared(2, plan.process_id, plan.thread_id) {
-        println("userspace: shell user register failed riscv64");
-        panic_mod.panic();
-    }
-    return plan.thread_id;
+    return header as c_ulong;
 }
 
-fn register_echo_user_program(): void {
-    const image = user_entry.image_from_header(normal_echo_user_image_addr() as usize);
-    if !user_program.register_or_refresh_image(3, image) {
-        println("userspace: echo user register failed riscv64");
-        panic_mod.panic();
-    }
+export c("cory_user_program_image_entry_phys") fn cory_user_program_image_entry_phys(program_id: c_ulong): c_ulong {
+    return user_entry.image_header_entry_phys(image_header_for_program(program_id as usize)) as c_ulong;
 }
 
-fn register_ps_user_program(): void {
-    const image = user_entry.image_from_header(normal_ps_user_image_addr() as usize);
-    if !user_program.register_or_refresh_image(4, image) {
-        println("userspace: ps user register failed riscv64");
-        panic_mod.panic();
+export c("cory_user_program_image_header_size") fn cory_user_program_image_header_size(program_id: c_ulong): c_ulong {
+    if !user_entry.image_header_is_valid(image_header_for_program(program_id as usize)) {
+        return 0;
     }
+    return user_entry.image_header_size as c_ulong;
 }
 
-export c("cory_refresh_builtin_user_images") fn cory_refresh_builtin_user_images(): void {
-    register_echo_user_program();
-    register_ps_user_program();
+export c("cory_user_program_image_code_size") fn cory_user_program_image_code_size(program_id: c_ulong): c_ulong {
+    return user_entry.image_header_code_size(image_header_for_program(program_id as usize)) as c_ulong;
+}
+
+export c("cory_user_program_image_stack_pages") fn cory_user_program_image_stack_pages(program_id: c_ulong): c_ulong {
+    return user_entry.image_header_stack_pages(image_header_for_program(program_id as usize)) as c_ulong;
 }
 
 export c("cory_normal_thread_a") fn cory_normal_thread_a(): void {
@@ -267,16 +242,6 @@ export c("cory_kernel_entry") fn cory_kernel_entry(): void {
     normal_thread_b_id = prepare_normal_thread(normal_thread_b_entry_addr() as usize, normal_thread_b_stack_top() as usize);
     println("scheduler: normal thread b ready");
     normal_user_thread_id = prepare_normal_user_thread(vm_plan.page_table_root);
-    if prepare_child_user_thread(vm_plan.page_table_root) == thread.invalid_id {
-        println("userspace: child user thread failed riscv64");
-        panic_mod.panic();
-    }
-    if prepare_shell_user_thread(vm_plan.page_table_root) == thread.invalid_id {
-        println("userspace: shell user thread failed riscv64");
-        panic_mod.panic();
-    }
-    register_echo_user_program();
-    register_ps_user_program();
     if !scheduler.enqueue(normal_user_thread_id) {
         println("userspace: normal user enqueue failed riscv64");
         panic_mod.panic();

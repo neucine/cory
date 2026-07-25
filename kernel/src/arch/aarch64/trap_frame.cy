@@ -222,6 +222,12 @@ pub fn argument3_from_frame(frame: *TrapFrame): usize {
     }
 }
 
+pub fn argument4_from_frame(frame: *TrapFrame): usize {
+    unchecked {
+        return (*frame).x4 as usize;
+    }
+}
+
 pub fn stack_pointer_from_frame(frame: *TrapFrame): usize {
     unchecked {
         return (*frame).sp as usize;

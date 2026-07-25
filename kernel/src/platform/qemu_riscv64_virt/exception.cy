@@ -4,6 +4,8 @@ import .arch.riscv64.context as riscv64_context;
 import .arch.riscv64.page_table;
 import { TrapFrame } from .arch.riscv64.trap_frame;
 import .console;
+import .fs;
+import { FsStatus } from .fs;
 import .memory.user_memory;
 import .memory.address_space;
 import .memory.vm;
@@ -25,6 +27,7 @@ import .task.scheduler;
 import .task.thread;
 import .task.context;
 import .task.user_program;
+import { UserProgramStatus } from .task.user_program;
 import .task.user_entry;
 import { UserEntryStatus } from .task.user_entry;
 
@@ -32,7 +35,6 @@ extern c("cory_arch_trap_init") fn cory_arch_trap_init(): void;
 extern c("cory_arch_abi_probe_value") fn cory_arch_abi_probe_value(): c_ulong;
 extern c("cory_riscv64_user_access_begin") fn user_access_begin(): void;
 extern c("cory_riscv64_user_access_end") fn user_access_end(): void;
-extern c("cory_refresh_builtin_user_images") fn refresh_builtin_user_images(): void;
 
 const breakpoint_scause: usize = 3;
 const user_ecall_scause: usize = 8;
@@ -222,7 +224,7 @@ fn current_identity_user(raw_frame: *TrapFrame): void {
 
 fn print_spawned_program(program_id: usize): void {
     if program_id == 1 {
-        println("userspace: normal user spawned child riscv64");
+        println("userspace: normal user spawned selftest riscv64");
         return;
     }
     if program_id == 2 {
@@ -237,12 +239,19 @@ fn print_spawned_program(program_id: usize): void {
         println("userspace: normal user spawned ps riscv64");
         return;
     }
+    if program_id == 5 {
+        println("userspace: normal user spawned ls riscv64");
+        return;
+    }
+    if program_id == 6 {
+        println("userspace: normal user spawned cat riscv64");
+        return;
+    }
     println("userspace: normal user spawned program riscv64");
 }
 
-fn spawn_known_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
-    refresh_builtin_user_images();
-    const program = user_program.get(request.arg0);
+fn spawn_program_user(raw_frame: *TrapFrame, program_id: usize, arg_ptr: usize, arg_len: usize): void {
+    const program = user_program.get(program_id);
     if program.program_id == user_program.invalid_program_id {
         return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_process));
         return;
@@ -254,7 +263,7 @@ fn spawn_known_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
     var target_process_id = program.process_id;
     var target_thread_id = program.thread_id;
     if program.image_phys != 0 {
-        const image = user_program.image_for_program(request.arg0);
+        const image = user_program.image_for_program(program_id);
         vm_activation.switch_user_root(identity_root);
         const plan = user_entry.prepare_spawned_image_thread(page_table.arch_id, 0, page_table.spec(), image);
         vm_activation.switch_user_root(current_root);
@@ -292,7 +301,7 @@ fn spawn_known_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
         return;
     }
     user_access_begin();
-    const arg_set = process_arg.set_from_user(page_table.arch_id, current_thread.process_id, target_process_id, request.arg1, request.arg2, page_table.spec());
+    const arg_set = process_arg.set_from_user(page_table.arch_id, current_thread.process_id, target_process_id, arg_ptr, arg_len, page_table.spec());
     user_access_end();
     if !arg_set {
         if !process.mark_inactive(target_process_id) {
@@ -306,7 +315,7 @@ fn spawn_known_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
         return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_process));
         return;
     }
-    print_spawned_program(request.arg0);
+    print_spawned_program(program_id);
     write_result_to_user_frame(raw_frame, syscall.ok_result(target_process_id, target_thread_id));
     if !trap_context.schedule_and_restore_current_to_front(raw_frame) {
         return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_process));
@@ -316,8 +325,31 @@ fn spawn_known_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
     panic_mod.panic();
 }
 
+fn spawn_known_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
+    spawn_program_user(raw_frame, request.arg0, request.arg1, request.arg2);
+}
+
+fn spawn_path_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
+    const current_thread = thread.get(scheduler.current());
+    if current_thread.id == thread.invalid_id {
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_process));
+        return;
+    }
+    user_access_begin();
+    const program_id = user_program.find_by_user_path(page_table.arch_id, current_thread.process_id, request.arg0, request.arg1, page_table.spec());
+    user_access_end();
+    if program_id == user_program.invalid_program_id {
+        if user_program.status() == UserProgramStatus.invalid_user_buffer {
+            return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_user_buffer));
+            return;
+        }
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_process));
+        return;
+    }
+    spawn_program_user(raw_frame, program_id, request.arg2, request.arg3);
+}
+
 fn inspect_program_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
-    refresh_builtin_user_images();
     const program = user_program.get(request.arg0);
     if program.program_id == user_program.invalid_program_id {
         return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_process));
@@ -325,6 +357,46 @@ fn inspect_program_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
     }
     println("userspace: normal user inspected program riscv64");
     return_result_to_user(raw_frame, syscall.ok_result(program.process_id, program.thread_id));
+}
+
+fn program_find_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
+    const current_thread = thread.get(scheduler.current());
+    if current_thread.id == thread.invalid_id {
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_process));
+        return;
+    }
+    user_access_begin();
+    const program_id = user_program.find_by_user_name(page_table.arch_id, current_thread.process_id, request.arg0, request.arg1, page_table.spec());
+    user_access_end();
+    if program_id == user_program.invalid_program_id {
+        if user_program.status() == UserProgramStatus.invalid_user_buffer {
+            return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_user_buffer));
+            return;
+        }
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_process));
+        return;
+    }
+    return_result_to_user(raw_frame, syscall.ok_result(program_id, 0));
+}
+
+fn program_find_path_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
+    const current_thread = thread.get(scheduler.current());
+    if current_thread.id == thread.invalid_id {
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_process));
+        return;
+    }
+    user_access_begin();
+    const program_id = user_program.find_by_user_path(page_table.arch_id, current_thread.process_id, request.arg0, request.arg1, page_table.spec());
+    user_access_end();
+    if program_id == user_program.invalid_program_id {
+        if user_program.status() == UserProgramStatus.invalid_user_buffer {
+            return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_user_buffer));
+            return;
+        }
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_process));
+        return;
+    }
+    return_result_to_user(raw_frame, syscall.ok_result(program_id, 0));
 }
 
 fn console_read_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
@@ -366,6 +438,93 @@ fn process_arg_read_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
         return;
     }
     return_result_to_user(raw_frame, syscall.ok_result(copied, 0));
+}
+
+fn fs_status_error(): SyscallError {
+    if fs.status() == FsStatus.not_found {
+        return SyscallError.not_found;
+    }
+    if fs.status() == FsStatus.invalid_fd {
+        return SyscallError.invalid_fd;
+    }
+    return SyscallError.invalid_user_buffer;
+}
+
+fn fs_list_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
+    const current_thread = thread.get(scheduler.current());
+    if current_thread.id == thread.invalid_id {
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_process));
+        return;
+    }
+    user_access_begin();
+    const copied = fs.list_to_user(page_table.arch_id, current_thread.process_id, request.arg0, request.arg1, request.arg2, 128, page_table.spec());
+    user_access_end();
+    if copied == 0 and fs.status() != FsStatus.ok {
+        return_result_to_user(raw_frame, syscall.error_result(fs_status_error()));
+        return;
+    }
+    return_result_to_user(raw_frame, syscall.ok_result(copied, 0));
+}
+
+fn fs_read_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
+    const current_thread = thread.get(scheduler.current());
+    if current_thread.id == thread.invalid_id {
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_process));
+        return;
+    }
+    user_access_begin();
+    const copied = fs.read_to_user(page_table.arch_id, current_thread.process_id, request.arg0, request.arg1, request.arg2, 128, page_table.spec());
+    user_access_end();
+    if copied == 0 and fs.status() != FsStatus.ok {
+        return_result_to_user(raw_frame, syscall.error_result(fs_status_error()));
+        return;
+    }
+    return_result_to_user(raw_frame, syscall.ok_result(copied, 0));
+}
+
+fn fs_open_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
+    const current_thread = thread.get(scheduler.current());
+    if current_thread.id == thread.invalid_id {
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_process));
+        return;
+    }
+    user_access_begin();
+    const fd = fs.open(page_table.arch_id, current_thread.process_id, request.arg0, request.arg1, page_table.spec());
+    user_access_end();
+    if fd == 0 {
+        return_result_to_user(raw_frame, syscall.error_result(fs_status_error()));
+        return;
+    }
+    return_result_to_user(raw_frame, syscall.ok_result(fd, 0));
+}
+
+fn fs_fd_read_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
+    const current_thread = thread.get(scheduler.current());
+    if current_thread.id == thread.invalid_id {
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_process));
+        return;
+    }
+    user_access_begin();
+    const copied = fs.read_fd_to_user(page_table.arch_id, current_thread.process_id, request.arg0, request.arg1, request.arg2, page_table.spec());
+    user_access_end();
+    if copied == 0 and fs.status() != FsStatus.ok {
+        return_result_to_user(raw_frame, syscall.error_result(fs_status_error()));
+        return;
+    }
+    return_result_to_user(raw_frame, syscall.ok_result(copied, 0));
+}
+
+fn fs_close_user(raw_frame: *TrapFrame, request: SyscallRequest): void {
+    const current_thread = thread.get(scheduler.current());
+    if current_thread.id == thread.invalid_id {
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.invalid_process));
+        return;
+    }
+    if !fs.close(current_thread.process_id, request.arg0) {
+        return_result_to_user(raw_frame, syscall.error_result(fs_status_error()));
+        return;
+    }
+    return_result_to_user(raw_frame, syscall.ok_result(0, 0));
 }
 
 fn dispatch_syscall(raw_frame: *TrapFrame, request: SyscallRequest): bool {
@@ -426,9 +585,33 @@ fn dispatch_syscall(raw_frame: *TrapFrame, request: SyscallRequest): bool {
         return_result_to_user(raw_frame, syscall.error_result(SyscallError.unsupported_return));
         return true;
     }
+    if request.op == SyscallOp.process_spawn_path {
+        if request.origin == SyscallOrigin.user {
+            spawn_path_user(raw_frame, request);
+            return true;
+        }
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.unsupported_return));
+        return true;
+    }
     if request.op == SyscallOp.program_inspect {
         if request.origin == SyscallOrigin.user {
             inspect_program_user(raw_frame, request);
+            return true;
+        }
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.unsupported_return));
+        return true;
+    }
+    if request.op == SyscallOp.program_find {
+        if request.origin == SyscallOrigin.user {
+            program_find_user(raw_frame, request);
+            return true;
+        }
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.unsupported_return));
+        return true;
+    }
+    if request.op == SyscallOp.program_find_path {
+        if request.origin == SyscallOrigin.user {
+            program_find_path_user(raw_frame, request);
             return true;
         }
         return_result_to_user(raw_frame, syscall.error_result(SyscallError.unsupported_return));
@@ -466,6 +649,46 @@ fn dispatch_syscall(raw_frame: *TrapFrame, request: SyscallRequest): bool {
         return_result_to_user(raw_frame, syscall.error_result(SyscallError.unsupported_return));
         return true;
     }
+    if request.op == SyscallOp.fs_list {
+        if request.origin == SyscallOrigin.user {
+            fs_list_user(raw_frame, request);
+            return true;
+        }
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.unsupported_return));
+        return true;
+    }
+    if request.op == SyscallOp.fs_read {
+        if request.origin == SyscallOrigin.user {
+            fs_read_user(raw_frame, request);
+            return true;
+        }
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.unsupported_return));
+        return true;
+    }
+    if request.op == SyscallOp.fs_open {
+        if request.origin == SyscallOrigin.user {
+            fs_open_user(raw_frame, request);
+            return true;
+        }
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.unsupported_return));
+        return true;
+    }
+    if request.op == SyscallOp.fs_fd_read {
+        if request.origin == SyscallOrigin.user {
+            fs_fd_read_user(raw_frame, request);
+            return true;
+        }
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.unsupported_return));
+        return true;
+    }
+    if request.op == SyscallOp.fs_close {
+        if request.origin == SyscallOrigin.user {
+            fs_close_user(raw_frame, request);
+            return true;
+        }
+        return_result_to_user(raw_frame, syscall.error_result(SyscallError.unsupported_return));
+        return true;
+    }
     return false;
 }
 
@@ -473,7 +696,7 @@ export c("cory_arch_trap_entry") fn cory_arch_trap_entry(raw_frame: *TrapFrame):
     const frame = trap_frame.diagnostic_from_frame(raw_frame);
     const syscall_number = trap_frame.argument0_from_frame(raw_frame);
     const request = syscall_request_from_frame(raw_frame, frame.scause, syscall_number);
-    const request_with_args = syscall.decode_request_for_origin(request.origin, request.number, trap_frame.argument2_from_frame(raw_frame), trap_frame.argument3_from_frame(raw_frame), trap_frame.argument4_from_frame(raw_frame), 0);
+    const request_with_args = syscall.decode_request_for_origin(request.origin, request.number, trap_frame.argument2_from_frame(raw_frame), trap_frame.argument3_from_frame(raw_frame), trap_frame.argument4_from_frame(raw_frame), trap_frame.argument5_from_frame(raw_frame));
     if dispatch_syscall(raw_frame, request_with_args) {
         return;
     }

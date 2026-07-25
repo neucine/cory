@@ -773,44 +773,44 @@ pub fn run_thread_tests(kernel_process_id: usize, kernel_thread_id: usize, arch:
     if user_program.status() != UserProgramStatus.invalid_program {
         fail("selftest: user program rejects zero status");
     }
-    if user_program.register_prepared(1, process.invalid_id, user_thread_id) {
+    if user_program.register_prepared(7, process.invalid_id, user_thread_id) {
         fail("selftest: user program rejects invalid process");
     }
     if user_program.status() != UserProgramStatus.invalid_process {
         fail("selftest: user program invalid process status");
     }
-    if user_program.register_prepared(1, user_process_id, thread.invalid_id) {
+    if user_program.register_prepared(7, user_process_id, thread.invalid_id) {
         fail("selftest: user program rejects invalid thread");
     }
     if user_program.status() != UserProgramStatus.invalid_thread {
         fail("selftest: user program invalid thread status");
     }
-    if user_program.register_prepared(1, user_process_id, kernel_thread_id) {
+    if user_program.register_prepared(7, user_process_id, kernel_thread_id) {
         fail("selftest: user program rejects wrong thread process");
     }
     if user_program.status() != UserProgramStatus.invalid_thread {
         fail("selftest: user program wrong thread process status");
     }
-    if !user_program.register_prepared(1, user_process_id, user_thread_id) {
+    if !user_program.register_prepared(7, user_process_id, user_thread_id) {
         fail("selftest: user program register");
     }
     if user_program.count() != 1 {
         fail("selftest: user program count");
     }
-    if user_program.register_prepared(1, user_process_id, user_thread_id) {
+    if user_program.register_prepared(7, user_process_id, user_thread_id) {
         fail("selftest: user program duplicate");
     }
     if user_program.status() != UserProgramStatus.duplicate_program {
         fail("selftest: user program duplicate status");
     }
-    const registered_program = user_program.get(1);
+    const registered_program = user_program.get(7);
     if registered_program.process_id != user_process_id {
         fail("selftest: user program process");
     }
     if registered_program.thread_id != user_thread_id {
         fail("selftest: user program thread");
     }
-    if user_program.get(2).program_id != user_program.invalid_program_id {
+    if user_program.get(8).program_id != user_program.invalid_program_id {
         fail("selftest: user program missing");
     }
     if user_program.status() != UserProgramStatus.invalid_program {
@@ -819,7 +819,7 @@ pub fn run_thread_tests(kernel_process_id: usize, kernel_thread_id: usize, arch:
     if !process.mark_active(user_process_id) {
         fail("selftest: user program mark active");
     }
-    if user_program.get(1).program_id != user_program.invalid_program_id {
+    if user_program.get(7).program_id != user_program.invalid_program_id {
         fail("selftest: user program active process");
     }
     if user_program.status() != UserProgramStatus.active_process {
@@ -831,7 +831,7 @@ pub fn run_thread_tests(kernel_process_id: usize, kernel_thread_id: usize, arch:
     if !thread.mark_blocked(user_thread_id) {
         fail("selftest: user program mark blocked");
     }
-    if user_program.get(1).program_id != user_program.invalid_program_id {
+    if user_program.get(7).program_id != user_program.invalid_program_id {
         fail("selftest: user program blocked thread");
     }
     if user_program.status() != UserProgramStatus.invalid_thread {
@@ -935,8 +935,32 @@ pub fn run_scheduler_tests(kernel_process_id: usize, kernel_thread_id: usize): v
     if syscall.from_number(syscall.number_process_spawn_known) != SyscallOp.process_spawn_known {
         fail("selftest: syscall process spawn number");
     }
+    if syscall.from_number(syscall.number_process_spawn_path) != SyscallOp.process_spawn_path {
+        fail("selftest: syscall process spawn path number");
+    }
     if syscall.from_number(syscall.number_program_inspect) != SyscallOp.program_inspect {
         fail("selftest: syscall program inspect number");
+    }
+    if syscall.from_number(syscall.number_program_find) != SyscallOp.program_find {
+        fail("selftest: syscall program find number");
+    }
+    if syscall.from_number(syscall.number_program_find_path) != SyscallOp.program_find_path {
+        fail("selftest: syscall program find path number");
+    }
+    if syscall.from_number(syscall.number_fs_list) != SyscallOp.fs_list {
+        fail("selftest: syscall fs list number");
+    }
+    if syscall.from_number(syscall.number_fs_read) != SyscallOp.fs_read {
+        fail("selftest: syscall fs read number");
+    }
+    if syscall.from_number(syscall.number_fs_open) != SyscallOp.fs_open {
+        fail("selftest: syscall fs open number");
+    }
+    if syscall.from_number(syscall.number_fs_fd_read) != SyscallOp.fs_fd_read {
+        fail("selftest: syscall fs fd read number");
+    }
+    if syscall.from_number(syscall.number_fs_close) != SyscallOp.fs_close {
+        fail("selftest: syscall fs close number");
     }
     if syscall.from_number(syscall.number_console_read) != SyscallOp.console_read {
         fail("selftest: syscall console read number");
@@ -1065,12 +1089,89 @@ pub fn run_scheduler_tests(kernel_process_id: usize, kernel_thread_id: usize): v
     if spawn_request.arg0 != 56 {
         fail("selftest: syscall process spawn arg0");
     }
+    const spawn_path_request = syscall.decode_request_for_origin(SyscallOrigin.user, syscall.number_process_spawn_path, 100, 101, 102, 103);
+    if spawn_path_request.op != SyscallOp.process_spawn_path {
+        fail("selftest: syscall process spawn path op");
+    }
+    if spawn_path_request.arg0 != 100 {
+        fail("selftest: syscall process spawn path arg0");
+    }
+    if spawn_path_request.arg3 != 103 {
+        fail("selftest: syscall process spawn path arg3");
+    }
     const inspect_request = syscall.decode_request_for_origin(SyscallOrigin.user, syscall.number_program_inspect, 60, 61, 62, 63);
     if inspect_request.op != SyscallOp.program_inspect {
         fail("selftest: syscall program inspect op");
     }
     if inspect_request.arg0 != 60 {
         fail("selftest: syscall program inspect arg0");
+    }
+    const find_request = syscall.decode_request_for_origin(SyscallOrigin.user, syscall.number_program_find, 72, 73, 74, 75);
+    if find_request.op != SyscallOp.program_find {
+        fail("selftest: syscall program find op");
+    }
+    if find_request.arg0 != 72 {
+        fail("selftest: syscall program find arg0");
+    }
+    if find_request.arg1 != 73 {
+        fail("selftest: syscall program find arg1");
+    }
+    const find_path_request = syscall.decode_request_for_origin(SyscallOrigin.user, syscall.number_program_find_path, 96, 97, 98, 99);
+    if find_path_request.op != SyscallOp.program_find_path {
+        fail("selftest: syscall program find path op");
+    }
+    if find_path_request.arg0 != 96 {
+        fail("selftest: syscall program find path arg0");
+    }
+    if find_path_request.arg1 != 97 {
+        fail("selftest: syscall program find path arg1");
+    }
+    const fs_list_request = syscall.decode_request_for_origin(SyscallOrigin.user, syscall.number_fs_list, 76, 77, 78, 79);
+    if fs_list_request.op != SyscallOp.fs_list {
+        fail("selftest: syscall fs list op");
+    }
+    if fs_list_request.arg0 != 76 {
+        fail("selftest: syscall fs list arg0");
+    }
+    if fs_list_request.arg1 != 77 {
+        fail("selftest: syscall fs list arg1");
+    }
+    const fs_read_request = syscall.decode_request_for_origin(SyscallOrigin.user, syscall.number_fs_read, 80, 81, 82, 83);
+    if fs_read_request.op != SyscallOp.fs_read {
+        fail("selftest: syscall fs read op");
+    }
+    if fs_read_request.arg0 != 80 {
+        fail("selftest: syscall fs read arg0");
+    }
+    if fs_read_request.arg2 != 82 {
+        fail("selftest: syscall fs read arg2");
+    }
+    const fs_open_request = syscall.decode_request_for_origin(SyscallOrigin.user, syscall.number_fs_open, 84, 85, 86, 87);
+    if fs_open_request.op != SyscallOp.fs_open {
+        fail("selftest: syscall fs open op");
+    }
+    if fs_open_request.arg0 != 84 {
+        fail("selftest: syscall fs open arg0");
+    }
+    if fs_open_request.arg1 != 85 {
+        fail("selftest: syscall fs open arg1");
+    }
+    const fs_fd_read_request = syscall.decode_request_for_origin(SyscallOrigin.user, syscall.number_fs_fd_read, 88, 89, 90, 91);
+    if fs_fd_read_request.op != SyscallOp.fs_fd_read {
+        fail("selftest: syscall fs fd read op");
+    }
+    if fs_fd_read_request.arg0 != 88 {
+        fail("selftest: syscall fs fd read arg0");
+    }
+    if fs_fd_read_request.arg2 != 90 {
+        fail("selftest: syscall fs fd read arg2");
+    }
+    const fs_close_request = syscall.decode_request_for_origin(SyscallOrigin.user, syscall.number_fs_close, 92, 93, 94, 95);
+    if fs_close_request.op != SyscallOp.fs_close {
+        fail("selftest: syscall fs close op");
+    }
+    if fs_close_request.arg0 != 92 {
+        fail("selftest: syscall fs close arg0");
     }
     const console_read_request = syscall.decode_request_for_origin(SyscallOrigin.user, syscall.number_console_read, 64, 65, 66, 67);
     if console_read_request.op != SyscallOp.console_read {
@@ -1132,6 +1233,14 @@ pub fn run_scheduler_tests(kernel_process_id: usize, kernel_thread_id: usize): v
     const no_input = syscall.error_result(SyscallError.no_input);
     if syscall.result_error_code(no_input) != 6 {
         fail("selftest: syscall no input code");
+    }
+    const not_found = syscall.error_result(SyscallError.not_found);
+    if syscall.result_error_code(not_found) != 7 {
+        fail("selftest: syscall not found code");
+    }
+    const invalid_fd = syscall.error_result(SyscallError.invalid_fd);
+    if syscall.result_error_code(invalid_fd) != 8 {
+        fail("selftest: syscall invalid fd code");
     }
     if scheduler.current() != kernel_thread_id {
         fail("selftest: scheduler current kernel");

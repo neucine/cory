@@ -1,4 +1,5 @@
 import .kernel;
+import .fs;
 import .arch.aarch64.context as aarch64_context;
 import .arch.aarch64.page_table as aarch64_page_table;
 import .arch.riscv64.context as riscv64_context;
@@ -52,6 +53,7 @@ fn init_object_spaces(): void {
     scheduler.init();
     user_program.init();
     process_arg.init();
+    fs.init();
     process_resources.init();
     page_table_pages.init();
     init_arch_contexts();

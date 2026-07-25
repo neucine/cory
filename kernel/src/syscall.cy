@@ -7,11 +7,19 @@ pub enum SyscallOp: i32 {
     process_wait_exited,
     process_current,
     process_spawn_known,
+    process_spawn_path,
     program_inspect,
     console_read,
     console_write,
     process_list,
     process_arg_read,
+    program_find,
+    program_find_path,
+    fs_list,
+    fs_read,
+    fs_open,
+    fs_fd_read,
+    fs_close,
 }
 
 pub enum SyscallStatus: i32 {
@@ -27,6 +35,8 @@ pub enum SyscallError: i32 {
     invalid_process,
     process_not_exited,
     no_input,
+    not_found,
+    invalid_fd,
 }
 
 pub enum SyscallOrigin: i32 {
@@ -64,6 +74,14 @@ pub const number_console_read: usize = 9;
 pub const number_console_write: usize = 10;
 pub const number_process_list: usize = 11;
 pub const number_process_arg_read: usize = 12;
+pub const number_program_find: usize = 13;
+pub const number_fs_list: usize = 14;
+pub const number_fs_read: usize = 15;
+pub const number_fs_open: usize = 16;
+pub const number_fs_fd_read: usize = 17;
+pub const number_fs_close: usize = 18;
+pub const number_program_find_path: usize = 19;
+pub const number_process_spawn_path: usize = 20;
 
 pub const asm_number_scheduler_yield_current: usize = 1;
 pub const asm_number_debug_write: usize = 3;
@@ -76,6 +94,14 @@ pub const asm_number_console_read: usize = 9;
 pub const asm_number_console_write: usize = 10;
 pub const asm_number_process_list: usize = 11;
 pub const asm_number_process_arg_read: usize = 12;
+pub const asm_number_program_find: usize = 13;
+pub const asm_number_fs_list: usize = 14;
+pub const asm_number_fs_read: usize = 15;
+pub const asm_number_fs_open: usize = 16;
+pub const asm_number_fs_fd_read: usize = 17;
+pub const asm_number_fs_close: usize = 18;
+pub const asm_number_program_find_path: usize = 19;
+pub const asm_number_process_spawn_path: usize = 20;
 
 export asm("CORY_SYSCALL_YIELD") const exported_asm_number_scheduler_yield_current: usize = 1;
 export asm("CORY_SYSCALL_DEBUG_WRITE") const exported_asm_number_debug_write: usize = 3;
@@ -88,6 +114,14 @@ export asm("CORY_SYSCALL_CONSOLE_READ") const exported_asm_number_console_read: 
 export asm("CORY_SYSCALL_CONSOLE_WRITE") const exported_asm_number_console_write: usize = 10;
 export asm("CORY_SYSCALL_PROCESS_LIST") const exported_asm_number_process_list: usize = 11;
 export asm("CORY_SYSCALL_PROCESS_ARG_READ") const exported_asm_number_process_arg_read: usize = 12;
+export asm("CORY_SYSCALL_PROGRAM_FIND") const exported_asm_number_program_find: usize = 13;
+export asm("CORY_SYSCALL_FS_LIST") const exported_asm_number_fs_list: usize = 14;
+export asm("CORY_SYSCALL_FS_READ") const exported_asm_number_fs_read: usize = 15;
+export asm("CORY_SYSCALL_FS_OPEN") const exported_asm_number_fs_open: usize = 16;
+export asm("CORY_SYSCALL_FS_FD_READ") const exported_asm_number_fs_fd_read: usize = 17;
+export asm("CORY_SYSCALL_FS_CLOSE") const exported_asm_number_fs_close: usize = 18;
+export asm("CORY_SYSCALL_PROGRAM_FIND_PATH") const exported_asm_number_program_find_path: usize = 19;
+export asm("CORY_SYSCALL_PROCESS_SPAWN_PATH") const exported_asm_number_process_spawn_path: usize = 20;
 
 var last_status: SyscallStatus = SyscallStatus.ok;
 
@@ -125,6 +159,30 @@ pub fn asm_numbers_match(): bool {
     if asm_number_process_arg_read != number_process_arg_read {
         return false;
     }
+    if asm_number_program_find != number_program_find {
+        return false;
+    }
+    if asm_number_fs_list != number_fs_list {
+        return false;
+    }
+    if asm_number_fs_read != number_fs_read {
+        return false;
+    }
+    if asm_number_fs_open != number_fs_open {
+        return false;
+    }
+    if asm_number_fs_fd_read != number_fs_fd_read {
+        return false;
+    }
+    if asm_number_fs_close != number_fs_close {
+        return false;
+    }
+    if asm_number_program_find_path != number_program_find_path {
+        return false;
+    }
+    if asm_number_process_spawn_path != number_process_spawn_path {
+        return false;
+    }
     return true;
 }
 
@@ -150,6 +208,9 @@ pub fn from_number(number: usize): SyscallOp {
     if number == number_process_spawn_known {
         return SyscallOp.process_spawn_known;
     }
+    if number == number_process_spawn_path {
+        return SyscallOp.process_spawn_path;
+    }
     if number == number_program_inspect {
         return SyscallOp.program_inspect;
     }
@@ -164,6 +225,27 @@ pub fn from_number(number: usize): SyscallOp {
     }
     if number == number_process_arg_read {
         return SyscallOp.process_arg_read;
+    }
+    if number == number_program_find {
+        return SyscallOp.program_find;
+    }
+    if number == number_program_find_path {
+        return SyscallOp.program_find_path;
+    }
+    if number == number_fs_list {
+        return SyscallOp.fs_list;
+    }
+    if number == number_fs_read {
+        return SyscallOp.fs_read;
+    }
+    if number == number_fs_open {
+        return SyscallOp.fs_open;
+    }
+    if number == number_fs_fd_read {
+        return SyscallOp.fs_fd_read;
+    }
+    if number == number_fs_close {
+        return SyscallOp.fs_close;
     }
     return SyscallOp.unknown;
 }
@@ -258,6 +340,12 @@ pub fn error_code(error: SyscallError): usize {
     }
     if error == SyscallError.no_input {
         return 6;
+    }
+    if error == SyscallError.not_found {
+        return 7;
+    }
+    if error == SyscallError.invalid_fd {
+        return 8;
     }
     return 2;
 }

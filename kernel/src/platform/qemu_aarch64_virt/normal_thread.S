@@ -53,12 +53,12 @@ cory_normal_user_image_addr:
     add x0, x0, :lo12:cory_normal_user_image_header
     ret
 
-.global cory_normal_child_user_image_addr
-.type cory_normal_child_user_image_addr, %function
-cory_normal_child_user_image_addr:
-    // C ABI: c_ulong cory_normal_child_user_image_addr(void)
-    adrp x0, cory_normal_child_user_image_header
-    add x0, x0, :lo12:cory_normal_child_user_image_header
+.global cory_normal_selftest_user_image_addr
+.type cory_normal_selftest_user_image_addr, %function
+cory_normal_selftest_user_image_addr:
+    // C ABI: c_ulong cory_normal_selftest_user_image_addr(void)
+    adrp x0, cory_normal_selftest_user_image_header
+    add x0, x0, :lo12:cory_normal_selftest_user_image_header
     ret
 
 .global cory_normal_shell_user_image_addr
@@ -83,6 +83,22 @@ cory_normal_ps_user_image_addr:
     // C ABI: c_ulong cory_normal_ps_user_image_addr(void)
     adrp x0, cory_normal_ps_user_image_header
     add x0, x0, :lo12:cory_normal_ps_user_image_header
+    ret
+
+.global cory_normal_ls_user_image_addr
+.type cory_normal_ls_user_image_addr, %function
+cory_normal_ls_user_image_addr:
+    // C ABI: c_ulong cory_normal_ls_user_image_addr(void)
+    adrp x0, cory_normal_ls_user_image_header
+    add x0, x0, :lo12:cory_normal_ls_user_image_header
+    ret
+
+.global cory_normal_cat_user_image_addr
+.type cory_normal_cat_user_image_addr, %function
+cory_normal_cat_user_image_addr:
+    // C ABI: c_ulong cory_normal_cat_user_image_addr(void)
+    adrp x0, cory_normal_cat_user_image_header
+    add x0, x0, :lo12:cory_normal_cat_user_image_header
     ret
 
 .section .bss.normal_thread_stack, "aw", %nobits
