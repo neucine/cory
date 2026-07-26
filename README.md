@@ -1,6 +1,6 @@
 # Cory
 
-**Cory** is a tiny Cyna-native kernel substrate for controlled hardware,
+**Cory** is a tiny [Cyna](https://cyna.dev)-native kernel substrate for controlled hardware,
 product-specific operating environments, and imaging systems.
 
 It is pronounced **Core-ry**.
