@@ -1,7 +1,7 @@
 # Cory
 
-**Cory** is a tiny [Cyna](https://cyna.dev)-native kernel substrate for controlled hardware,
-product-specific operating environments, and imaging systems.
+**Cory** is a tiny [Cyna](https://cyna.dev)-native kernel substrate for
+controlled hardware and product-specific operating environments.
 
 It is pronounced **Core-ry**.
 
@@ -9,18 +9,6 @@ Cory is not trying to become a Linux replacement, a Unix clone, a desktop OS, or
 a general-purpose server platform. It is a focused kernel foundation for devices
 where the OS personality should be small, explicit, capability-oriented, and
 close to the hardware.
-
-The long-term product target is Raspberry Pi Compute Module 5 based camera and
-imaging hardware. The first meaningful demo is a camera-shaped pipeline rather
-than a shell:
-
-```text
-FakeSensor -> FakeISP -> Preview -> StorageWriter
-```
-
-That pipeline is intended to run across isolated userspace services, communicate
-through capability-based IPC, move frame-like data with shared buffers, and
-report end-to-end latency through kernel tracing.
 
 ## Why Cory Exists
 
@@ -31,7 +19,7 @@ cross-architecture boundaries.
 
 The project is deliberately narrow. A smaller kernel surface makes it possible
 to keep hardware policy, authority, scheduling, and data movement understandable
-as the imaging stack grows.
+as the system grows.
 
 ```text
 Neucine  — ecosystem / organization
@@ -77,7 +65,6 @@ Still intentionally missing:
 - a standard executable format such as ELF
 - IPC
 - shared buffers
-- the camera pipeline demo
 
 That gap is the point of the next phase: grow the kernel upward only after the
 authority and scheduling foundations are real enough to carry it.
@@ -102,17 +89,17 @@ The detailed architecture walk-through lives in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The canonical design record is
 [`docs/SPEC.md`](docs/SPEC.md).
 
-## Target Tracks
+## Architecture Tracks
 
-Cory has two hardware tracks:
+Cory currently maintains two architecture tracks:
 
 ```text
-Product track:   AArch64 / Raspberry Pi Compute Module 5
-Research track:  RISC-V64 / SiFive HiFive Unmatched
+AArch64
+RISC-V64
 ```
 
-Initial development happens in QEMU so both architecture paths can stay honest
-while the kernel is still small.
+Development currently happens in QEMU so both architecture paths can stay
+honest while the kernel is still small.
 
 ## Build And Run
 
