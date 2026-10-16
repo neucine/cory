@@ -20,7 +20,6 @@ fn fail(name: string): void {
     panic_mod.panic();
 }
 
-
 pub fn run_kernel_object_tests(): void {
     kernel_object.init();
     if kernel_object.count() != 0 {

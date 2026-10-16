@@ -21,7 +21,6 @@ fn fail(name: string): void {
     panic_mod.panic();
 }
 
-
 pub fn run_boot_tests(map: Layout): void {
     if map.ram_start >= map.ram_end {
         fail("selftest: ram range");

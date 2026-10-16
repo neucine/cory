@@ -1,6 +1,6 @@
 import .syscall;
 
-cstruct Message {
+c struct Message {
     bytes: [31]u8;
 }
 

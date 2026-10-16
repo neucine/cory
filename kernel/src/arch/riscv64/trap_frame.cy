@@ -21,7 +21,7 @@ pub struct TrapDiagnosticFrame {
 // trap.S reserves 288 bytes to keep the stack 16-byte aligned across the call
 // into Cyna; that final 8 bytes is trap-stack padding, not a TrapFrame field.
 //
-pub cstruct TrapFrame {
+pub c struct TrapFrame {
     ra: c_ulong;
     sp: c_ulong;
     gp: c_ulong;
@@ -59,7 +59,7 @@ pub cstruct TrapFrame {
     stval: c_ulong;
 }
 
-pub const empty_frame_value: TrapFrame = TrapFrame {
+pub const empty_frame_value: TrapFrame = {
     ra: 0,
     sp: 0,
     gp: 0,

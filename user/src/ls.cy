@@ -1,14 +1,14 @@
 import .syscall;
 
-cstruct Buffer {
+c struct Buffer {
     bytes: [128]u8;
 }
 
-cstruct PathBuffer {
+c struct PathBuffer {
     bytes: [64]u8;
 }
 
-cstruct NotFoundMessage {
+c struct NotFoundMessage {
     bytes: [15]u8;
 }
 

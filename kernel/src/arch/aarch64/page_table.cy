@@ -147,7 +147,9 @@ pub fn activation_sctlr_set_bits(): usize {
 fn ensure_child_table(parent_page: usize, entry_index: usize, tables: Spec): usize {
     const existing = vm.read_bootstrap_table_entry(parent_page, entry_index, tables);
     if existing != 0 {
-        return vm.bootstrap_table_page_index(table_phys(TableEntry { raw: existing }));
+        return vm.bootstrap_table_page_index(table_phys(TableEntry {
+            raw: existing
+        }));
     }
 
     const child = vm.allocate_bootstrap_table_page();
@@ -173,7 +175,9 @@ fn leaf_table_page_for_virt(tables: Spec, virt: usize, create: bool): usize {
             if raw == 0 {
                 return tables.entries_per_table;
             }
-            table_page = vm.bootstrap_table_page_index(table_phys(TableEntry { raw: raw }));
+            table_page = vm.bootstrap_table_page_index(table_phys(TableEntry {
+                raw: raw
+            }));
         }
         if table_page >= vm.bootstrap_table_page_count() {
             return tables.entries_per_table;
@@ -186,7 +190,9 @@ fn leaf_table_page_for_virt(tables: Spec, virt: usize, create: bool): usize {
 fn ensure_child_table_phys(root_table: usize, parent_table: usize, entry_index: usize, tables: Spec): usize {
     const existing = vm.read_table_entry(parent_table, entry_index, tables);
     if existing != 0 {
-        return table_phys(TableEntry { raw: existing });
+        return table_phys(TableEntry {
+            raw: existing
+        });
     }
 
     const child = phys.alloc_page();
@@ -221,7 +227,9 @@ fn leaf_table_phys_for_virt(root_table: usize, tables: Spec, virt: usize, create
             if raw == 0 {
                 return 0;
             }
-            table_phys_addr = table_phys(TableEntry { raw: raw });
+            table_phys_addr = table_phys(TableEntry {
+                raw: raw
+            });
         }
         if table_phys_addr == 0 {
             return 0;
@@ -337,7 +345,9 @@ pub fn lookup_user_phys(root_table: usize, tables: Spec, virt: usize): usize {
     if raw == 0 {
         return 0;
     }
-    return leaf_phys(LeafEntry { raw: raw });
+    return leaf_phys(LeafEntry {
+        raw: raw
+    });
 }
 
 pub fn populate_bootstrap_tables(tables: Spec): bool {
@@ -371,5 +381,7 @@ pub fn lookup_bootstrap_phys(tables: Spec, virt: usize): usize {
     if raw == 0 {
         return 0;
     }
-    return leaf_phys(LeafEntry { raw: raw });
+    return leaf_phys(LeafEntry {
+        raw: raw
+    });
 }

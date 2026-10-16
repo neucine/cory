@@ -1,10 +1,10 @@
 import .syscall;
 
-cstruct Buffer {
+c struct Buffer {
     bytes: [65]u8;
 }
 
-cstruct NewlineMessage {
+c struct NewlineMessage {
     bytes: [2]u8;
 }
 

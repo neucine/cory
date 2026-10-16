@@ -20,7 +20,6 @@ fn fail(name: string): void {
     panic_mod.panic();
 }
 
-
 fn check_aarch64_leaf_entry(phys: usize, rights: u8, should_write: bool, should_execute: bool): void {
     const entry = aarch64_page_table.encode_leaf(phys, rights);
     if !page_table.entry_is_present(entry) {

@@ -134,7 +134,8 @@ fn child_name_offset_for_dir(child_index: usize, dir_index: usize): usize {
     if child_len <= dir_len + 1 {
         return archive_path_size;
     }
-    if record_path_byte(child_index, dir_len) != '/' {
+    const slash: u8 = '/';
+    if record_path_byte(child_index, dir_len) != slash {
         return archive_path_size;
     }
 
@@ -164,7 +165,8 @@ fn child_name_len_for_dir(child_index: usize, dir_index: usize): usize {
         if ch == 0 {
             return len;
         }
-        if ch == '/' {
+        const slash: u8 = '/';
+        if ch == slash {
             return 0;
         }
         len = len + 1;

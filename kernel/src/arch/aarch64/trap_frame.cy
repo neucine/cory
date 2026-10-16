@@ -17,7 +17,7 @@ pub struct ExceptionDiagnosticFrame {
 // calling Cyna. Field order is therefore an ABI between exception.S and this
 // module; append or reorder fields only together with the assembly offsets.
 //
-pub cstruct TrapFrame {
+pub c struct TrapFrame {
     x0: c_ulong;
     x1: c_ulong;
     x2: c_ulong;
@@ -56,7 +56,7 @@ pub cstruct TrapFrame {
     far_el1: c_ulong;
 }
 
-pub const empty_frame_value: TrapFrame = TrapFrame {
+pub const empty_frame_value: TrapFrame = {
     x0: 0,
     x1: 0,
     x2: 0,

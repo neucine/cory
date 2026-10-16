@@ -36,42 +36,115 @@ pub fn name_len(program_id: usize): usize {
     return 0;
 }
 
+// A typed local shapes an ASCII rune into a byte on the current compiler.
 pub fn name_byte(program_id: usize, offset: usize): u8 {
     if program_id == selftest {
-        if offset == 0 { return 's'; }
-        if offset == 1 { return 'e'; }
-        if offset == 2 { return 'l'; }
-        if offset == 3 { return 'f'; }
-        if offset == 4 { return 't'; }
-        if offset == 5 { return 'e'; }
-        if offset == 6 { return 's'; }
-        if offset == 7 { return 't'; }
+        if offset == 0 {
+            const byte: u8 = 's';
+            return byte;
+        }
+        if offset == 1 {
+            const byte: u8 = 'e';
+            return byte;
+        }
+        if offset == 2 {
+            const byte: u8 = 'l';
+            return byte;
+        }
+        if offset == 3 {
+            const byte: u8 = 'f';
+            return byte;
+        }
+        if offset == 4 {
+            const byte: u8 = 't';
+            return byte;
+        }
+        if offset == 5 {
+            const byte: u8 = 'e';
+            return byte;
+        }
+        if offset == 6 {
+            const byte: u8 = 's';
+            return byte;
+        }
+        if offset == 7 {
+            const byte: u8 = 't';
+            return byte;
+        }
     }
     if program_id == shell {
-        if offset == 0 { return 's'; }
-        if offset == 1 { return 'h'; }
-        if offset == 2 { return 'e'; }
-        if offset == 3 { return 'l'; }
-        if offset == 4 { return 'l'; }
+        if offset == 0 {
+            const byte: u8 = 's';
+            return byte;
+        }
+        if offset == 1 {
+            const byte: u8 = 'h';
+            return byte;
+        }
+        if offset == 2 {
+            const byte: u8 = 'e';
+            return byte;
+        }
+        if offset == 3 {
+            const byte: u8 = 'l';
+            return byte;
+        }
+        if offset == 4 {
+            const byte: u8 = 'l';
+            return byte;
+        }
     }
     if program_id == echo {
-        if offset == 0 { return 'e'; }
-        if offset == 1 { return 'c'; }
-        if offset == 2 { return 'h'; }
-        if offset == 3 { return 'o'; }
+        if offset == 0 {
+            const byte: u8 = 'e';
+            return byte;
+        }
+        if offset == 1 {
+            const byte: u8 = 'c';
+            return byte;
+        }
+        if offset == 2 {
+            const byte: u8 = 'h';
+            return byte;
+        }
+        if offset == 3 {
+            const byte: u8 = 'o';
+            return byte;
+        }
     }
     if program_id == ps {
-        if offset == 0 { return 'p'; }
-        if offset == 1 { return 's'; }
+        if offset == 0 {
+            const byte: u8 = 'p';
+            return byte;
+        }
+        if offset == 1 {
+            const byte: u8 = 's';
+            return byte;
+        }
     }
     if program_id == ls {
-        if offset == 0 { return 'l'; }
-        if offset == 1 { return 's'; }
+        if offset == 0 {
+            const byte: u8 = 'l';
+            return byte;
+        }
+        if offset == 1 {
+            const byte: u8 = 's';
+            return byte;
+        }
     }
     if program_id == cat {
-        if offset == 0 { return 'c'; }
-        if offset == 1 { return 'a'; }
-        if offset == 2 { return 't'; }
+        if offset == 0 {
+            const byte: u8 = 'c';
+            return byte;
+        }
+        if offset == 1 {
+            const byte: u8 = 'a';
+            return byte;
+        }
+        if offset == 2 {
+            const byte: u8 = 't';
+            return byte;
+        }
     }
     return 0;
 }
@@ -85,11 +158,26 @@ pub fn bin_path_len(program_id: usize): usize {
 }
 
 pub fn bin_path_byte(program_id: usize, offset: usize): u8 {
-    if offset == 0 { return '/'; }
-    if offset == 1 { return 'b'; }
-    if offset == 2 { return 'i'; }
-    if offset == 3 { return 'n'; }
-    if offset == 4 { return '/'; }
+    if offset == 0 {
+        const byte: u8 = '/';
+        return byte;
+    }
+    if offset == 1 {
+        const byte: u8 = 'b';
+        return byte;
+    }
+    if offset == 2 {
+        const byte: u8 = 'i';
+        return byte;
+    }
+    if offset == 3 {
+        const byte: u8 = 'n';
+        return byte;
+    }
+    if offset == 4 {
+        const byte: u8 = '/';
+        return byte;
+    }
     return name_byte(program_id, offset - bin_prefix_len);
 }
 
@@ -133,7 +221,11 @@ fn path_has_bin_prefix(addr: usize, len: usize): bool {
     if len <= bin_prefix_len {
         return false;
     }
-    return user_byte(addr, 0) == '/' and user_byte(addr, 1) == 'b' and user_byte(addr, 2) == 'i' and user_byte(addr, 3) == 'n' and user_byte(addr, 4) == '/';
+    const slash: u8 = '/';
+    const b: u8 = 'b';
+    const i: u8 = 'i';
+    const n: u8 = 'n';
+    return user_byte(addr, 0) == slash and user_byte(addr, 1) == b and user_byte(addr, 2) == i and user_byte(addr, 3) == n and user_byte(addr, 4) == slash;
 }
 
 pub fn path_to_program_id(addr: usize, len: usize): usize {

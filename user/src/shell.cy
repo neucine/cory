@@ -1,34 +1,34 @@
 import .syscall;
 
-cstruct Buffer {
+c struct Buffer {
     bytes: [64]u8;
 }
 
-cstruct ProgramPath {
+c struct ProgramPath {
     bytes: [21]u8;
 }
 
-cstruct ArgumentBuffer {
+c struct ArgumentBuffer {
     bytes: [64]u8;
 }
 
-cstruct NewlineMessage {
+c struct NewlineMessage {
     bytes: [2]u8;
 }
 
-cstruct BannerMessage {
+c struct BannerMessage {
     bytes: [58]u8;
 }
 
-cstruct HelpMessage {
+c struct HelpMessage {
     bytes: [58]u8;
 }
 
-cstruct ExitMessage {
+c struct ExitMessage {
     bytes: [13]u8;
 }
 
-cstruct UnknownMessage {
+c struct UnknownMessage {
     bytes: [24]u8;
 }
 

@@ -1,26 +1,26 @@
 import .syscall;
 
-cstruct DebugMessage {
+c struct DebugMessage {
     bytes: [34]u8;
 }
 
-cstruct CurrentMessage {
+c struct CurrentMessage {
     bytes: [33]u8;
 }
 
-cstruct SelftestWaitMessage {
+c struct SelftestWaitMessage {
     bytes: [39]u8;
 }
 
-cstruct ShellWaitMessage {
+c struct ShellWaitMessage {
     bytes: [36]u8;
 }
 
-cstruct SelftestPath {
+c struct SelftestPath {
     bytes: [14]u8;
 }
 
-cstruct ShellPath {
+c struct ShellPath {
     bytes: [11]u8;
 }
 

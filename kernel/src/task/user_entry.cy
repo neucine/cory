@@ -41,7 +41,7 @@ pub const image_magic: usize = user_image_abi.image_magic;
 pub const image_version: usize = user_image_abi.image_version;
 pub const image_header_size: usize = user_image_abi.image_header_size;
 
-pub cstruct UserImageHeader {
+pub c struct UserImageHeader {
     magic: c_ulong;
     version: c_ulong;
     header_size: c_ulong;

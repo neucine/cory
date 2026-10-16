@@ -508,7 +508,7 @@ pub fn run_thread_tests(kernel_process_id: usize, kernel_thread_id: usize, arch:
         if riscv64_context.stack_pointer(kernel_context.arch_context_id) != kernel_context.stack_pointer {
             fail("selftest: thread kernel riscv64 arch context sp");
         }
-    if riscv64_context.status_flags(kernel_context.arch_context_id) != kernel_context.status_flags {
+        if riscv64_context.status_flags(kernel_context.arch_context_id) != kernel_context.status_flags {
             fail("selftest: thread kernel riscv64 arch context flags");
         }
     }
