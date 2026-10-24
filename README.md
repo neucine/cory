@@ -104,6 +104,9 @@ honest while the kernel is still small.
 ## Build And Run
 
 You need a Cyna compiler and QEMU for the target you want to boot.
+Record any Cyna capability or compiler gap in the sibling Cyna repository's
+`docs/LANGUAGE_GAPS.md`, with the affected Cory target and a minimal
+reproduction. Cory does not keep a separate Cyna gap log.
 
 The check runner builds user programs, packs the initramfs, builds the kernel,
 boots QEMU, sends a short shell script, and verifies the expected serial output:
