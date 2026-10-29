@@ -103,7 +103,8 @@ honest while the kernel is still small.
 
 ## Build And Run
 
-You need a Cyna compiler and QEMU for the target you want to boot.
+You need Cyna 0.4.0 and QEMU for the target you want to boot. `tools/dev.sh`
+uses `cyna` on `PATH`; set `CYNA` to a specific 0.4.0 compiler if needed.
 Record any Cyna capability or compiler gap in the sibling Cyna repository's
 `docs/LANGUAGE_GAPS.md`, with the affected Cory target and a minimal
 reproduction. Cory does not keep a separate Cyna gap log.

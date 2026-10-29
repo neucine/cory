@@ -1,8 +1,13 @@
 #!/usr/bin/env sh
 set -eu
 
-CYNA="${CYNA:-/Users/chao.yang/Private/cyna/zig-out/bin/cyna}"
+CYNA="${CYNA:-cyna}"
 QEMU_TIMEOUT="${QEMU_TIMEOUT:-15}"
+
+if [ "$("$CYNA" version 2>&1)" != "cyna 0.4.0" ]; then
+  printf '%s\n' 'Cory requires Cyna 0.4.0; set CYNA to the release compiler' >&2
+  exit 1
+fi
 
 usage() {
   cat <<'EOF'
